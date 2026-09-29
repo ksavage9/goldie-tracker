@@ -211,13 +211,12 @@ struct StorageRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Label("Goldie Files", systemImage: "internaldrive")
-                Spacer()
-                Text("\(used.formatted(.byteCount(style: .file))) of \(limit.formatted(.byteCount(style: .file)))")
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-            }
+            // Name and numbers on separate lines: side by side they don't fit the sidebar.
+            Label("Goldie Files", systemImage: "internaldrive")
+            Text("\(used.formatted(.byteCount(style: .file))) of \(limit.formatted(.byteCount(style: .file))) used")
+                .font(.subheadline)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
             ProgressView(value: Double(min(used, limit)), total: Double(limit))
                 .tint(isFull ? Color.red : Color.accentColor)
             Group {
@@ -260,7 +259,7 @@ struct DayRow: View {
                         .foregroundStyle(.secondary)
                     Text("\(day.screenshots.count) screenshots")
                         .font(.caption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.secondary)  // tertiary is unreadable on the selected row's highlight
                 }
             }
 
