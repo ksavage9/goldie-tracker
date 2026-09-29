@@ -259,6 +259,8 @@ struct DayRow: View {
                     Text(day.timeRange)
                         .font(.subheadline)
                         .foregroundStyle(.primary.opacity(0.75))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)  // "7:00 AM – 7:55 AM" stays on one line in the sidebar
                     Text("\(day.screenshots.count) screenshots")
                         .font(.caption)
                         .foregroundStyle(.primary.opacity(0.6))
