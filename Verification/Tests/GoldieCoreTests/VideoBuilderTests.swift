@@ -21,7 +21,8 @@ final class VideoBuilderTests: XCTestCase {
         let asset = AVURLAsset(url: output)
         let duration = try await asset.load(.duration)
         XCTAssertEqual(duration.seconds, 12.0 / 5, accuracy: 0.01, "12 screenshots at 5 per second, the last one shown for a full frame")
-        let track = try XCTUnwrap(try await asset.loadTracks(withMediaType: .video).first)
+        let tracks = try await asset.loadTracks(withMediaType: .video)
+        let track = try XCTUnwrap(tracks.first)
         let size = try await track.load(.naturalSize)
         XCTAssertEqual(size, CGSize(width: 1280, height: 958), "scaled to 1280 wide, even height for H.264")
 
