@@ -30,10 +30,10 @@ enum StorageGuard {
         return picked
     }
 
-    /// Free space on the iPad, counting space iOS can reclaim from caches.
+    /// Free space on the iPad, counting space iOS can reclaim from caches, or plain free space if that isn't available.
+    /// Read from the app's home folder: it always exists (Documents may not yet) and is on the same drive as Goldie's files.
     static func availableBytes() -> Int64? {
-        try? URL.documentsDirectory
-            .resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
-            .volumeAvailableCapacityForImportantUsage
+        let values = try? URL.homeDirectory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey, .volumeAvailableCapacityKey])
+        return values?.volumeAvailableCapacityForImportantUsage ?? values?.volumeAvailableCapacity.map(Int64.init)
     }
 }
