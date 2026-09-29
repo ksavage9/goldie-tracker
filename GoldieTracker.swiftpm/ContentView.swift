@@ -254,12 +254,14 @@ struct DayRow: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 } else {
+                    // Faded primary rather than .secondary: it turns white on the selected row's orange
+                    // highlight (like the title), where .secondary is too faint to read.
                     Text(day.timeRange)
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.primary.opacity(0.75))
                     Text("\(day.screenshots.count) screenshots")
                         .font(.caption)
-                        .foregroundStyle(.secondary)  // tertiary is unreadable on the selected row's highlight
+                        .foregroundStyle(.primary.opacity(0.6))
                 }
             }
 
