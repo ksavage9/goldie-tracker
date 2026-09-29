@@ -25,12 +25,13 @@ xcrun simctl terminate "$UDID" "$BUNDLE"
 
 echo "== Seeded launch (a Goldie folder with 3 days of screenshots)"
 DATA=$(xcrun simctl get_app_container "$UDID" "$BUNDLE" data)
+COUNT=0
 BOOKMARK=$(swift ci/seed.swift "$DATA/Documents/GoldieShots")
 xcrun simctl spawn "$UDID" defaults write "$BUNDLE" screenshotFolderBookmark -data "$BOOKMARK"
 xcrun simctl launch "$UDID" "$BUNDLE"
 for i in $(seq 1 18); do   # up to 90 s for the two finished days to build
     sleep 5
-    COUNT=$(ls "$DATA/Documents/Animations"/*.mp4 2>/dev/null | wc -l | tr -d ' ')
+    COUNT=$( (ls "$DATA/Documents/Animations"/*.mp4 2>/dev/null || true) | wc -l | tr -d ' ')  # none yet is 0, not an error
     [ "$COUNT" = "2" ] && break
 done
 sleep 3
