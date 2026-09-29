@@ -1,0 +1,76 @@
+# Goldie Tracker
+
+An iPad keeps Find My open on Goldie's AirTag. A shortcut takes a screenshot every 5 minutes.
+The Goldie Tracker app turns each day's screenshots into a video with the time stamped on every
+frame, and plays it back.
+
+## Install (about 2 minutes)
+
+1. On the iPad, install **Swift Playgrounds** from the App Store (it's free).
+2. Get `GoldieTracker.zip` onto the iPad. The easiest way from a Windows PC is to go to
+   **icloud.com → iCloud Drive** in a web browser and upload the zip. You can also email it
+   to yourself or use OneDrive.
+3. On the iPad, open **Files**, find the zip, and tap it to unzip. Then tap
+   **GoldieTracker.swiftpm**. It opens in Swift Playgrounds.
+4. Tap **▶ Run**.
+
+The app opens to a **setup checklist** (about 5 minutes). It has buttons that jump to Shortcuts
+and start the tracker. It shows a ✓ once screenshots are arriving, then switches to the day list.
+You can reopen the checklist later with the **Setup** button.
+
+To use the app later, open Swift Playgrounds → Goldie Tracker → ▶.
+
+## What Apple requires you to do by hand
+
+iPadOS doesn't let any app or script change Settings, create shortcuts, or add automations,
+so the checklist walks you through these:
+
+- Auto-Lock → Never
+- Building the 11-action **Goldie Snap** shortcut
+- Adding one daily **12:00 AM** automation
+- Choosing the `Goldie` folder in the app
+
+## Using the app
+
+- **Days list:** tap any day to play its animation. A ▶ icon means it's ready.
+- **Jump to:** the date picker at the top of the list opens a calendar. Pick any day to go
+  straight to it.
+- **Build Now:** makes an animation right away from every screenshot available so far,
+  including today's. It then plays it.
+- **Speed slider:** under the video, drag from 0.25× (slow, to study each spot) to 4× (a whole
+  day in about 15 seconds). The app remembers your setting.
+- **Heat Map:** on any day, tap **Heat Map** to see where Goldie spent her time. The glow runs
+  from blue (passing through) to red (most time), and her busiest spot gets a pulsing marker.
+  The first time, you tap the center of her marker on the map once, so the app knows what to
+  look for. It then finds her in every screenshot on its own. Use **Pick Marker Again** if
+  results look off. For accurate results, don't pan or zoom the Find My map during the day.
+- **Daily animations:** whenever the app is open, it builds an animation for each finished day
+  that doesn't have one yet. It also rebuilds one that's out of date, for example if you tapped
+  Build Now in the afternoon.
+- **Status:** the top of the list shows when the last screenshot was taken. If none has
+  arrived for 15 minutes, or none are saved, it turns red and shows a **Restart** button that
+  starts the Goldie Snap shortcut.
+
+## Good to know
+
+- **While you use the app on this iPad, the shortcut brings Find My back to the front** at
+  the next 5-minute mark. That's expected. Switch back to keep watching.
+- **Animations can't be built in the background.** If the app goes to the background while an
+  animation is building (for example, when Find My comes to the front), the build stops. It's
+  retried automatically about 15 minutes later, and the previous animation is kept until a new
+  one is finished.
+- **iPadOS may sometimes stop a long-running shortcut.** Use the Restart button when that
+  happens. The midnight automation starts it fresh every day anyway.
+- **Storage:** screenshots take roughly 100–200 MB a day. The **Storage** section in the day
+  list shows how much Goldie's files use and how much space the iPad has free. Goldie's files are
+  kept under a limit you pick (2, 5, 10 or 20 GB; 5 GB is about a month of screenshots), and the
+  app always leaves at least 2 GB free on the iPad.
+  - When space runs out, the oldest days' screenshots are removed first, but only after that
+    day's animation is finished. The animation stays, and so does the day in the list. Heat Map
+    and Build Now are turned off for that day, because they need the screenshots.
+  - The oldest animations are removed only as a last resort.
+  - Today's screenshots, and any day still waiting for its animation, are never removed.
+- **AirTag limits:** an AirTag doesn't have GPS. Its location updates only when a nearby
+  iPhone or iPad passes it along. Updates can be 15–60+ minutes apart in quiet areas, so
+  you'll see Goldie jump between spots rather than trace a path. If you need to know for sure
+  whether she's crossing the street, a GPS cat collar (like Tractive) shows her actual route.

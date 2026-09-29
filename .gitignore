@@ -1,0 +1,4 @@
+GoldieTracker.zip
+.build/
+.swiftpm/
+Verification/Sources/GoldieCore/*.swift
