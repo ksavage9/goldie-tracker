@@ -52,6 +52,9 @@ so the checklist walks you through these:
   This animation is only kept while you watch it, so it doesn't use up storage.
 - **Speed slider:** under the video, drag from 0.25× (slow, to study each spot) to 4× (a whole
   day in about 15 seconds). The app remembers your setting.
+- **Frame by frame:** the ◀︎ and ▶︎ frame buttons under the video pause it and step back or
+  forward one screenshot (5 minutes) at a time. The time of each screenshot is shown in the
+  bottom-right corner of the frame.
 - **Heat Map:** on any day, tap **Heat Map** to see where Goldie spent her time. The glow runs
   from blue (passing through) to red (most time), and her busiest spot gets a pulsing marker.
   The first time, you tap the center of her marker on the map once, so the app knows what to

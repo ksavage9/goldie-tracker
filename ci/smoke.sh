@@ -44,3 +44,6 @@ ls -la "$DATA/Documents/Animations" || true
 running || { echo "FAIL: app is not running after the seeded launch (crashed?)"; exit 1; }
 [ "$COUNT" = "2" ] || { echo "FAIL: expected 2 animations for the finished days, found $COUNT"; exit 1; }
 echo "PASS: app built both finished days' animations by itself and is still running"
+
+FIRST_VIDEO=$(ls "$DATA/Documents/Animations"/*.mp4 | sort | head -1)
+swift ci/frame.swift "$FIRST_VIDEO" "$OUT/3-animation-frame.png"

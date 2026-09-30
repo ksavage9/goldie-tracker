@@ -175,6 +175,21 @@ struct PlayerView: View {
                 .background(.black)
 
             HStack(spacing: 12) {
+                // One frame is one screenshot, 5 minutes apart.
+                Button {
+                    step(by: -1)
+                } label: {
+                    Image(systemName: "backward.frame.fill")
+                }
+                .accessibilityLabel("Previous frame")
+                Button {
+                    step(by: 1)
+                } label: {
+                    Image(systemName: "forward.frame.fill")
+                }
+                .accessibilityLabel("Next frame")
+                Divider()
+                    .frame(height: 22)
                 Image(systemName: "tortoise.fill")
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
@@ -222,5 +237,12 @@ struct PlayerView: View {
             }
         }
         .onDisappear { player?.pause() }
+    }
+
+    /// Pauses and moves exactly one frame back or forward.
+    private func step(by frames: Int) {
+        guard let player else { return }
+        player.pause()
+        player.currentItem?.step(byCount: frames)
     }
 }
