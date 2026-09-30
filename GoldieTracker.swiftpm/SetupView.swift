@@ -4,7 +4,9 @@ import UniformTypeIdentifiers
 /// One-time setup checklist. Shown until the first screenshot arrives, and from the Setup button after that.
 struct SetupView: View {
     @EnvironmentObject private var store: Store
+    @Environment(\.openURL) private var openURL
     @State private var showingFolderPicker = false
+    @State private var startAfterPickingFolder = false  // Start was tapped before a folder was chosen
     @State private var pendingLimitGB: Int?  // a lower limit waiting for the user to confirm
 
     /// Raising the limit applies at once. Lowering it below what's already used removes files, so it asks first.
@@ -105,8 +107,8 @@ struct SetupView: View {
             }
 
             Section {
-                Text("Tap Start. When Find My opens, tap **Items → Goldie** and leave it there. (Between 11:50 PM and midnight the shortcut stops right away and the midnight run takes over.)")
-                Link(destination: runGoldieSnapURL) {
+                Text("Tap Start. If you haven't chosen the folder yet, pick **On My iPad → Goldie** first. When Find My opens, tap **Items → Goldie** and leave it there. (Between 11:50 PM and midnight the shortcut stops right away and the midnight run takes over.)")
+                Button(action: start) {
                     Label("Start Goldie Snap", systemImage: "play.fill")
                         .frame(maxWidth: .infinity)
                 }
@@ -121,6 +123,9 @@ struct SetupView: View {
                     Label("Waiting for the first screenshot…", systemImage: "hourglass")
                         .foregroundStyle(.secondary)
                 }
+                Label("Swift Playgrounds stops this app while Find My is in front, so it looks black when you come back. Tap **▶ Run** to start it again; your setup is saved.", systemImage: "info.circle")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             } header: {
                 StepHeader(number: 5, title: "Start Tracking", done: store.lastScreenshotDate != nil)
             }
@@ -143,7 +148,14 @@ struct SetupView: View {
         .fileImporter(isPresented: $showingFolderPicker, allowedContentTypes: [.folder]) { result in
             if case .success(let url) = result {
                 store.setFolder(url)
+                if startAfterPickingFolder, store.folderURL != nil {
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(600))  // let the folder picker finish closing first
+                        openURL(runGoldieSnapURL)
+                    }
+                }
             }
+            startAfterPickingFolder = false
         }
         .confirmationDialog(
             "Lower the Storage Limit?",
@@ -156,6 +168,17 @@ struct SetupView: View {
             }
         } message: { _ in
             Text("Goldie's files are over that limit, so the oldest screenshots (and, if needed, the oldest animations) will be removed now. This can't be undone.")
+        }
+    }
+
+    /// Starts the shortcut. The app can only read the Goldie folder after it's been picked once
+    /// (an iPadOS privacy rule), so without one it asks for the folder first, then starts.
+    private func start() {
+        if store.folderURL == nil {
+            startAfterPickingFolder = true
+            showingFolderPicker = true
+        } else {
+            openURL(runGoldieSnapURL)
         }
     }
 }

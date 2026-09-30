@@ -20,6 +20,10 @@ You can reopen the checklist later with the **Setup** button.
 
 To use the app later, open Swift Playgrounds → Goldie Tracker → ▶.
 
+**If the app shows a black screen:** Swift Playgrounds stops the app while another app is in
+front, and the shortcut brings Find My to the front every 5 minutes. When you come back, tap
+**▶ Run** to start it again. Your folder, settings and animations are saved.
+
 ## What Apple requires you to do by hand
 
 iPadOS doesn't let any app or script change Settings, create shortcuts, or add automations,
