@@ -37,6 +37,43 @@ final class HeatmapBuilderTests: XCTestCase {
         XCTAssertEqual(decoded.decoys, template.decoys)
     }
 
+    /// A golden cat's marker is nearly as light as the map in grayscale. The old brightness-difference
+    /// matching "found" her on plain patches of map in screenshots where she was off screen.
+    func testALightColoredMarkerIsNotFoundOnPlainMap() async throws {
+        let folder = try Fixtures.makeTemporaryFolder("heatmap-light")
+        let start = Date(timeIntervalSince1970: 1_790_000_000)
+        let golden = UIColor(red: 1.0, green: 0.88, blue: 0.55, alpha: 1)
+        let home = CGPoint(x: 600, y: 300), street = CGPoint(x: 1000, y: 750)
+        let plan: [CGPoint?] = Array(repeating: home, count: 10) + Array(repeating: street, count: 6)
+            + Array(repeating: nil, count: 6)  // off screen
+        var screenshots: [Screenshot] = []
+        for (i, marker) in plan.enumerated() {
+            screenshots.append(try Fixtures.write(Fixtures.screenshot(marker: marker, face: golden), to: folder.appending(path: "\(i).jpg"), created: start + Double(i) * 300))
+        }
+        let reference = try XCTUnwrap(UIImage(contentsOfFile: screenshots[0].url.path))
+        let tap = CGPoint(x: (home.x + 3) / Fixtures.size.width, y: (home.y - 2) / Fixtures.size.height)
+        let template = try await HeatmapBuilder.makeTemplate(from: reference, tappedAt: tap)
+        XCTAssertLessThanOrEqual(template.decoys.count, 2, "only her sidebar icon should be a decoy, not blank patches of map")
+
+        let heatmap = try await HeatmapBuilder.build(from: screenshots, template: template) { _ in }
+        XCTAssertEqual(heatmap.found, 16, "found in the 16 screenshots where she's on the map, and none of the 6 where she isn't")
+        XCTAssertEqual(heatmap.busiestSpot.x, home.x / Fixtures.size.width, accuracy: 0.02)
+        XCTAssertEqual(heatmap.busiestSpot.y, home.y / Fixtures.size.height, accuracy: 0.02)
+    }
+
+    func testTappingAPlainSpotIsRefused() async throws {
+        let folder = try Fixtures.makeTemporaryFolder("heatmap-plain")
+        let screenshot = try Fixtures.write(Fixtures.screenshot(marker: CGPoint(x: 600, y: 300)), to: folder.appending(path: "a.jpg"), created: .now)
+        let image = try XCTUnwrap(UIImage(contentsOfFile: screenshot.url.path))
+        do {
+            // An empty square of map between roads, nowhere near her marker.
+            _ = try await HeatmapBuilder.makeTemplate(from: image, tappedAt: CGPoint(x: 450 / Fixtures.size.width, y: 250 / Fixtures.size.height))
+            XCTFail("a tap on plain map should be refused")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("too plain"), "unexpected error: \(error.localizedDescription)")
+        }
+    }
+
     func testUsesTheLatestReadableScreenshotAsTheBackground() async throws {
         let folder = try Fixtures.makeTemporaryFolder("heatmap-readable")
         let start = Date(timeIntervalSince1970: 1_790_000_000)

@@ -12,6 +12,10 @@ struct MarkerTemplate: Codable {
     let pixels: [Pixel]  // grayscale disc around the marker's center
     let radius: Int
     let decoys: [GridPoint]  // other spots that look like the marker, e.g. her icon in the Find My list
+    /// Required, so a marker saved by the old brightness-difference matching (whose decoys could include
+    /// blank patches of map) fails to load and is picked again.
+    let matching: String
+    static let currentMatching = "correlation"
 }
 
 struct GridPoint: Codable, Hashable {
@@ -32,7 +36,10 @@ struct Heatmap {
 /// Screenshots are shrunk to a 640-pixel-wide grayscale grid first so matching stays fast.
 enum HeatmapBuilder {
     static let gridWidth = 640
-    static let matchThreshold: Float = 0.01  // mean squared brightness difference that still counts as "that's Goldie"
+    /// How closely the pattern must match (normalized cross-correlation, -1...1) to count as "that's Goldie".
+    static let minimumCorrelation: Float = 0.8
+    /// Brightness spread below which an area counts as plain (about 3%). Plain areas can't match, and a tap on one is refused.
+    static let minimumVariance: Float = 0.0009
     static let minutesPerScreenshot = 5
 
     /// Heat colors from cool to hot, shared by the overlay and the legend.
@@ -59,11 +66,16 @@ enum HeatmapBuilder {
                 pixels.append(.init(dx: dx, dy: dy, value: grid[cx + dx, cy + dy]))
             }
         }
+        let mean = pixels.reduce(0) { $0 + $1.value } / Float(pixels.count)
+        let variance = pixels.reduce(0) { $0 + ($1.value - mean) * ($1.value - mean) } / Float(pixels.count)
+        guard variance >= minimumVariance else {
+            throw BuildError("That spot is too plain to be Goldie's marker. Pick her marker again, tapping right in its center.")
+        }
 
         // Anything else on this screen that looks like the marker is a decoy to ignore from now on.
-        let candidate = MarkerTemplate(pixels: pixels, radius: r, decoys: [])
+        let candidate = MarkerTemplate(pixels: pixels, radius: r, decoys: [], matching: MarkerTemplate.currentMatching)
         var decoys: [GridPoint] = []
-        for (index, score) in matchScores(grid, candidate).enumerated() where score < matchThreshold && decoys.count < 200 {
+        for (index, score) in matchScores(grid, candidate).enumerated() where score >= minimumCorrelation && decoys.count < 200 {
             let spot = GridPoint(x: index % grid.width + r, y: index / grid.width + r)
             let farFromTap = abs(spot.x - cx) > 3 * r || abs(spot.y - cy) > 3 * r
             let isNew = !decoys.contains { abs($0.x - spot.x) <= r && abs($0.y - spot.y) <= r }
@@ -71,7 +83,7 @@ enum HeatmapBuilder {
                 decoys.append(spot)
             }
         }
-        return MarkerTemplate(pixels: pixels, radius: r, decoys: decoys)
+        return MarkerTemplate(pixels: pixels, radius: r, decoys: decoys, matching: MarkerTemplate.currentMatching)
     }
 
     static func build(
@@ -194,37 +206,52 @@ enum HeatmapBuilder {
         return Grid(width: gridWidth, height: height, values: values)
     }
 
-    /// Mean squared difference between the marker and the screen at every position,
-    /// indexed by the top-left corner of the marker's bounding square. Lower is a better match.
+    /// How well the marker's pattern matches the screen at every position, from -1 to 1 (normalized
+    /// cross-correlation), indexed by the top-left corner of the marker's bounding square. Higher is better.
+    /// It compares the pattern of light and dark, not brightness itself, so plain areas (empty map, blank
+    /// sidebar) score near 0 even when a light-colored marker is as bright as they are.
     private static func matchScores(_ grid: Grid, _ template: MarkerTemplate) -> [Float] {
         let r = template.radius
+        let n = Float(template.pixels.count)
         let count = grid.values.count - 2 * r * grid.width - 2 * r
-        var scores = [Float](repeating: 0, count: count)
-        var difference = [Float](repeating: 0, count: count)
+        let mean = template.pixels.reduce(0) { $0 + $1.value } / n
+        let weights = template.pixels.map { $0.value - mean }  // the marker with its average brightness removed
+        let templateNorm = weights.reduce(0) { $0 + $1 * $1 }.squareRoot()
+        let squares = vDSP.multiply(grid.values, grid.values)
+        var products = [Float](repeating: 0, count: count)
+        var sums = [Float](repeating: 0, count: count)
+        var sumsOfSquares = [Float](repeating: 0, count: count)
 
-        // One vectorized pass per marker pixel: scores += (screen shifted by that pixel - pixel value)²
+        // One vectorized pass per marker pixel, adding up the screen under the marker three ways.
         grid.values.withUnsafeBufferPointer { values in
-            scores.withUnsafeMutableBufferPointer { scores in
-                difference.withUnsafeMutableBufferPointer { difference in
-                    for pixel in template.pixels {
-                        let offset = (pixel.dy + r) * grid.width + (pixel.dx + r)
-                        var negated = -pixel.value
-                        vDSP_vsadd(values.baseAddress! + offset, 1, &negated, difference.baseAddress!, 1, vDSP_Length(count))
-                        vDSP_vma(
-                            difference.baseAddress!, 1, difference.baseAddress!, 1,
-                            scores.baseAddress!, 1, scores.baseAddress!, 1, vDSP_Length(count)
-                        )
+            squares.withUnsafeBufferPointer { squares in
+                products.withUnsafeMutableBufferPointer { products in
+                    sums.withUnsafeMutableBufferPointer { sums in
+                        sumsOfSquares.withUnsafeMutableBufferPointer { sumsOfSquares in
+                            for (pixel, weight) in zip(template.pixels, weights) {
+                                let offset = (pixel.dy + r) * grid.width + (pixel.dx + r)
+                                var weight = weight
+                                vDSP_vsma(values.baseAddress! + offset, 1, &weight, products.baseAddress!, 1, products.baseAddress!, 1, vDSP_Length(count))
+                                vDSP_vadd(values.baseAddress! + offset, 1, sums.baseAddress!, 1, sums.baseAddress!, 1, vDSP_Length(count))
+                                vDSP_vadd(squares.baseAddress! + offset, 1, sumsOfSquares.baseAddress!, 1, sumsOfSquares.baseAddress!, 1, vDSP_Length(count))
+                            }
+                        }
                     }
                 }
             }
         }
-        scores = vDSP.multiply(1 / Float(template.pixels.count), scores)
+
+        // correlation = products / (templateNorm × √(the screen's spread under the marker)). The spread has a
+        // floor, so a plain area's tiny noise can't be divided into a high score.
+        let spread = vDSP.subtract(sumsOfSquares, vDSP.multiply(1 / n, vDSP.multiply(sums, sums)))
+        let floored = vDSP.clip(spread, to: (n * minimumVariance)...Float.greatestFiniteMagnitude)
+        var scores = vDSP.divide(products, vDSP.multiply(templateNorm, vForce.sqrt(floored)))
 
         // Positions near the right edge wrap around onto the next row, so they don't count.
         var rowStart = 0
         while rowStart < count {
             for x in (grid.width - 2 * r)..<grid.width where rowStart + x < count {
-                scores[rowStart + x] = .infinity
+                scores[rowStart + x] = -.infinity
             }
             rowStart += grid.width
         }
@@ -237,12 +264,12 @@ enum HeatmapBuilder {
         for decoy in template.decoys {
             for y in max(0, decoy.y - 3 * r)...(decoy.y + r) {
                 for x in max(0, decoy.x - 3 * r)...min(grid.width - 1, decoy.x + r) where y * grid.width + x < scores.count {
-                    scores[y * grid.width + x] = .infinity
+                    scores[y * grid.width + x] = -.infinity
                 }
             }
         }
-        let (index, score) = vDSP.indexOfMinimum(scores)
-        guard score < matchThreshold else { return nil }  // she's off screen, or hidden
+        let (index, score) = vDSP.indexOfMaximum(scores)
+        guard score >= minimumCorrelation else { return nil }  // she's off screen, or hidden
         return GridPoint(x: Int(index) % grid.width + r, y: Int(index) / grid.width + r)
     }
 

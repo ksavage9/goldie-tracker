@@ -7,7 +7,7 @@ enum Fixtures {
     static let size = CGSize(width: 1366, height: 1024)  // iPad's 4:3 shape, smaller so tests run fast
     static let sidebarIcon = CGPoint(x: 50, y: 120)
 
-    static func screenshot(marker: CGPoint?, size: CGSize = size) -> UIImage {
+    static func screenshot(marker: CGPoint?, face: UIColor = .orange, size: CGSize = size) -> UIImage {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         return UIGraphicsImageRenderer(size: size, format: format).image { context in
@@ -25,18 +25,18 @@ enum Fixtures {
             context.fill(CGRect(x: 700, y: 400, width: 250, height: 200))
             UIColor(white: 0.97, alpha: 1).setFill()
             context.fill(CGRect(x: 0, y: 0, width: 360, height: size.height))
-            drawMarker(at: sidebarIcon, in: cg)
+            drawMarker(at: sidebarIcon, face: face, in: cg)
             if let marker {
-                drawMarker(at: marker, in: cg)
+                drawMarker(at: marker, face: face, in: cg)
             }
         }
     }
 
-    /// White ring, orange face, two dark eyes: roughly an emoji marker on the Find My map.
-    static func drawMarker(at c: CGPoint, in cg: CGContext) {
+    /// White ring, colored face, two dark eyes: roughly an emoji marker on the Find My map.
+    static func drawMarker(at c: CGPoint, face: UIColor, in cg: CGContext) {
         cg.setFillColor(UIColor.white.cgColor)
         cg.fillEllipse(in: CGRect(x: c.x - 22, y: c.y - 22, width: 44, height: 44))
-        cg.setFillColor(UIColor.orange.cgColor)
+        cg.setFillColor(face.cgColor)
         cg.fillEllipse(in: CGRect(x: c.x - 15, y: c.y - 15, width: 30, height: 30))
         cg.setFillColor(UIColor.black.cgColor)
         cg.fillEllipse(in: CGRect(x: c.x - 7, y: c.y - 8, width: 5, height: 5))
