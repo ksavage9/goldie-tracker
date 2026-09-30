@@ -29,16 +29,17 @@ struct Day: Identifiable {
     var title: String {
         if Calendar.current.isDateInToday(date) { return "Today" }
         if Calendar.current.isDateInYesterday(date) { return "Yesterday" }
-        return date.formatted(.dateTime.weekday(.wide).month(.wide).day())
+        return date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())  // "Monday, Sep 28" fits the sidebar
     }
 
     var fullDate: String {
         date.formatted(date: .complete, time: .omitted)
     }
 
+    /// "7:00 – 7:55 AM": the system's compact range, which states AM/PM once when both times share it.
     var timeRange: String {
         guard let first = screenshots.first?.date, let last = screenshots.last?.date else { return "" }
-        return "\(first.timeText) – \(last.timeText)"
+        return (first..<last).formatted(.interval.hour().minute())
     }
 }
 
