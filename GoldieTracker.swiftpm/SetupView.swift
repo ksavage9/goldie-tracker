@@ -107,7 +107,7 @@ struct SetupView: View {
             }
 
             Section {
-                Text("Tap Start. If you haven't chosen the folder yet, pick **On My iPad → Goldie** first. When Find My opens, tap **Items → Goldie** and leave it there. (Between 11:50 PM and midnight the shortcut stops right away and the midnight run takes over.)")
+                Text("Tap Start. If you haven't chosen the folder yet, pick **On My iPad → Goldie** first. When Find My opens, tap **Items → Goldie** and leave it there. If iPadOS asks whether Goldie Snap may take a screenshot, tap **OK**; it should only ask once, and while it's asking no screenshots are taken. (Between 11:50 PM and midnight the shortcut stops right away and the midnight run takes over.)")
                 Button(action: start) {
                     Label("Start Goldie Snap", systemImage: "play.fill")
                         .frame(maxWidth: .infinity)

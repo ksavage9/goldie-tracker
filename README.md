@@ -68,6 +68,12 @@ so the checklist walks you through these:
   animation is building (for example, when Find My comes to the front), the build stops. It's
   retried automatically about 15 minutes later, and the previous animation is kept until a new
   one is finished.
+- **"Goldie Snap wants to take a screenshot":** iPadOS asks this the first time the shortcut
+  takes a screenshot. Tap **OK**, not Don't Allow. It should be remembered after that. While the
+  question is on screen, no screenshots are taken, so the status turns red if nobody answers. If
+  it keeps coming back, open Shortcuts → **•••** on Goldie Snap → details (ⓘ) → **Privacy**, tap
+  **Reset Privacy**, run the shortcut once and tap **OK**. Editing the shortcut may also make it
+  ask again.
 - **iPadOS may sometimes stop a long-running shortcut.** Use the Restart button when that
   happens. The midnight automation starts it fresh every day anyway.
 - **Storage:** screenshots take roughly 100–200 MB a day. The **Storage** section in the day
