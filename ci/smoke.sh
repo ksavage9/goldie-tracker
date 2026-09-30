@@ -9,7 +9,11 @@ APP=$(find "$PRODUCTS" -maxdepth 4 -name "*.app" -path "*iphonesimulator*" | hea
 BUNDLE=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Info.plist")
 echo "App: $APP ($BUNDLE)"
 
-running() { xcrun simctl spawn "$UDID" launchctl list | grep -q "$BUNDLE"; }
+# Save the list, then search it: piping into `grep -q` can end in a broken pipe, which pipefail reports as "not running".
+running() {
+    xcrun simctl spawn "$UDID" launchctl list > "$OUT/launchctl.txt"
+    grep -q "$BUNDLE" "$OUT/launchctl.txt"
+}
 
 xcrun simctl boot "$UDID" 2>/dev/null || true
 xcrun simctl bootstatus "$UDID" -b
