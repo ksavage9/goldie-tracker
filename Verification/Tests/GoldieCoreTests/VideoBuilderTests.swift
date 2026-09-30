@@ -50,6 +50,28 @@ final class VideoBuilderTests: XCTestCase {
         XCTAssertGreaterThan(Fixtures.brightness(of: frame, x: 640, y: 100), 0.7, "light map background")
     }
 
+    func testMultiDayAnimationsStampTheDateToo() async throws {
+        let folder = try Fixtures.makeTemporaryFolder("video-dates")
+        let start = Date(timeIntervalSince1970: 1_790_000_000)
+        let screenshots = [
+            try Fixtures.write(Fixtures.screenshot(marker: nil), to: folder.appending(path: "a.jpg"), created: start),
+            try Fixtures.write(Fixtures.screenshot(marker: nil), to: folder.appending(path: "b.jpg"), created: start + 86_400),
+        ]
+        func firstFrame(showsDate: Bool) async throws -> CGImage {
+            let output = folder.appending(path: showsDate ? "dates.mp4" : "times.mp4")
+            try await VideoBuilder.makeVideo(from: screenshots, to: output, showsDate: showsDate) { _ in }
+            let generator = AVAssetImageGenerator(asset: AVURLAsset(url: output))
+            generator.requestedTimeToleranceBefore = .zero
+            generator.requestedTimeToleranceAfter = .zero
+            return try await generator.image(at: CMTime(value: 1, timescale: 10)).image
+        }
+        // Just inside the top of the pill, right of where "3:05 PM" ends but inside "Sep 29, 3:05 PM".
+        let timeOnly = try await firstFrame(showsDate: false)
+        let withDate = try await firstFrame(showsDate: true)
+        XCTAssertGreaterThan(Fixtures.brightness(of: timeOnly, x: 350, y: 843), 0.7, "a time alone leaves this spot as map")
+        XCTAssertLessThan(Fixtures.brightness(of: withDate, x: 350, y: 843), 0.5, "the wider date-and-time pill covers it")
+    }
+
     func testSkipsUnreadableFilesAndRejectsADayWithNone() async throws {
         let folder = try Fixtures.makeTemporaryFolder("video-bad")
         let start = Date(timeIntervalSince1970: 1_790_000_000)

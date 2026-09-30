@@ -9,6 +9,7 @@ enum VideoBuilder {
     static func makeVideo(
         from screenshots: [Screenshot],
         to outputURL: URL,
+        showsDate: Bool = false,  // for animations that span days
         onProgress: @MainActor (Double) -> Void
     ) async throws {
         // The first screenshot that opens sets the video size.
@@ -50,7 +51,7 @@ enum VideoBuilder {
                 guard writer.status == .writing else { throw stopped() }
                 await onProgress(Double(index) / Double(screenshots.count))
                 let frame = autoreleasepool {
-                    makeFrame(screenshot, size: size, pool: adaptor.pixelBufferPool)
+                    makeFrame(screenshot, size: size, showsDate: showsDate, pool: adaptor.pixelBufferPool)
                 }
                 guard let frame else { continue }  // unreadable file, skip it
 
@@ -89,7 +90,7 @@ enum VideoBuilder {
         return CGSize(width: width, height: height)
     }
 
-    private static func makeFrame(_ screenshot: Screenshot, size: CGSize, pool: CVPixelBufferPool?) -> CVPixelBuffer? {
+    private static func makeFrame(_ screenshot: Screenshot, size: CGSize, showsDate: Bool, pool: CVPixelBufferPool?) -> CVPixelBuffer? {
         guard let pool, let image = UIImage(contentsOfFile: screenshot.url.path) else { return nil }
 
         let format = UIGraphicsImageRendererFormat()
@@ -98,7 +99,7 @@ enum VideoBuilder {
             UIColor.black.setFill()
             UIRectFill(CGRect(origin: .zero, size: size))
             image.draw(in: AVMakeRect(aspectRatio: image.size, insideRect: CGRect(origin: .zero, size: size)))
-            drawTimestamp(screenshot.date, in: size)
+            drawTimestamp(screenshot.date, showsDate: showsDate, in: size)
         }
         guard let cgImage = rendered.cgImage else { return nil }
 
@@ -121,9 +122,9 @@ enum VideoBuilder {
         return buffer
     }
 
-    /// Draws the screenshot's time (e.g. "3:05 PM") in the bottom-left corner.
-    private static func drawTimestamp(_ date: Date, in size: CGSize) {
-        let text = date.timeText as NSString
+    /// Draws the screenshot's time (e.g. "3:05 PM", or "Sep 29, 3:05 PM" with the date) in the bottom-left corner.
+    private static func drawTimestamp(_ date: Date, showsDate: Bool, in size: CGSize) {
+        let text = (showsDate ? date.formatted(.dateTime.month(.abbreviated).day().hour().minute()) : date.timeText) as NSString
         let baseFont = UIFont.monospacedDigitSystemFont(ofSize: size.height * 0.055, weight: .semibold)
         let font = baseFont.fontDescriptor.withDesign(.rounded).map { UIFont(descriptor: $0, size: 0) } ?? baseFont
         let attributes: [NSAttributedString.Key: Any] = [

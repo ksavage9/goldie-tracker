@@ -5,6 +5,7 @@ struct DayDetailView: View {
     @EnvironmentObject private var store: Store
     let day: Day
     @State private var showingHeatmap = false
+    @State private var showingCustomRange = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -35,8 +36,17 @@ struct DayDetailView: View {
             .buttonStyle(.bordered)
             .disabled(day.screenshots.isEmpty)  // heat maps and builds need the screenshots
 
+            Button {
+                showingCustomRange = true
+            } label: {
+                Label("Time Range", systemImage: "clock")
+                    .labelStyle(.titleAndIcon)
+            }
+            .buttonStyle(.bordered)
+            .disabled(day.screenshots.isEmpty)
+
             Button(action: buildNow) {
-                Label("Build Now", systemImage: "wand.and.stars")
+                Label(store.videoDate(for: day) == nil ? "Build Now" : "Rebuild", systemImage: "wand.and.stars")
                     .labelStyle(.titleAndIcon)
             }
             .buttonStyle(.borderedProminent)
@@ -45,6 +55,13 @@ struct DayDetailView: View {
         .fullScreenCover(isPresented: $showingHeatmap) {
             HeatmapView(day: day)
                 .environmentObject(store)
+        }
+        .fullScreenCover(isPresented: $showingCustomRange) {
+            CustomAnimationView(
+                start: day.screenshots.first?.date ?? day.date,
+                end: day.screenshots.last?.date ?? day.date
+            )
+            .environmentObject(store)
         }
     }
 

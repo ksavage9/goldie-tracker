@@ -104,6 +104,31 @@ final class StoreTests: XCTestCase {
         XCTAssertNil(store.errorMessage, "no repeated alert")
     }
 
+    func testScreenshotsInATimeRangeAcrossDays() throws {
+        let calendar = Calendar.current
+        let todayStart = calendar.startOfDay(for: .now)
+        let folder = try Fixtures.makeTemporaryFolder("Goldie-range")
+        let twoDaysAgo8AM = calendar.date(byAdding: .day, value: -2, to: todayStart)! + 8 * 3600
+        let yesterday8AM = calendar.date(byAdding: .day, value: -1, to: todayStart)! + 8 * 3600
+        for (i, created) in (0..<6).map({ twoDaysAgo8AM + Double($0) * 300 }).enumerated() {
+            try Fixtures.write(Fixtures.screenshot(marker: nil), to: folder.appending(path: "a\(i).jpg"), created: created)
+        }
+        for (i, created) in (0..<6).map({ yesterday8AM + Double($0) * 300 }).enumerated() {
+            try Fixtures.write(Fixtures.screenshot(marker: nil), to: folder.appending(path: "b\(i).jpg"), created: created)
+        }
+        let store = Store()
+        store.setFolder(folder)
+
+        // 8:10 two days ago through 8:05 yesterday: the last 4 of the first day and the first 2 of the next.
+        let range = store.screenshots(from: twoDaysAgo8AM + 600, to: yesterday8AM + 300)
+        XCTAssertEqual(range.count, 6)
+        XCTAssertEqual(range.first?.date, twoDaysAgo8AM + 600, "the start is included")
+        XCTAssertEqual(range.last?.date, yesterday8AM + 300, "the end is included")
+        XCTAssertEqual(range.map(\.date), range.map(\.date).sorted(), "oldest first, across days")
+        XCTAssertEqual(store.firstScreenshotDate, twoDaysAgo8AM)
+        XCTAssertTrue(store.screenshots(from: yesterday8AM + 3600, to: yesterday8AM + 7200).isEmpty)
+    }
+
     private func dayID(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")

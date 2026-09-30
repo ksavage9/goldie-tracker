@@ -39,8 +39,13 @@ so the checklist walks you through these:
 - **Days list:** tap any day to play its animation. A ▶ icon means it's ready.
 - **Jump to:** the date picker at the top of the list opens a calendar. Pick any day to go
   straight to it.
-- **Build Now:** makes an animation right away from every screenshot available so far,
-  including today's. It then plays it.
+- **Build Now / Rebuild:** makes a day's animation right away from every screenshot available
+  so far, including today's, then plays it. Once a day has an animation, the button says
+  **Rebuild** and remakes it on demand.
+- **Time Range:** on any day, tap **Time Range** to make an animation from exactly the stretch
+  you pick, with a **From** and **To** date and time. The range can cross days (for example,
+  Tuesday 6 PM to Wednesday 8 AM). When it does, each frame shows the date as well as the time.
+  This animation is only kept while you watch it, so it doesn't use up storage.
 - **Speed slider:** under the video, drag from 0.25× (slow, to study each spot) to 4× (a whole
   day in about 15 seconds). The app remembers your setting.
 - **Heat Map:** on any day, tap **Heat Map** to see where Goldie spent her time. The glow runs
