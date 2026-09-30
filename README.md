@@ -63,8 +63,8 @@ so the checklist walks you through these:
   happens. The midnight automation starts it fresh every day anyway.
 - **Storage:** screenshots take roughly 100–200 MB a day. The **Storage** section in the day
   list shows how much Goldie's files use and how much space the iPad has free. Goldie's files are
-  kept under a limit you pick (2, 5, 10 or 20 GB; 5 GB is about a month of screenshots), and the
-  app always leaves at least 2 GB free on the iPad.
+  kept under a limit you pick in **Setup** (the gear button): 2, 5, 10 or 20 GB, where 5 GB is
+  about a month of screenshots. The app always leaves at least 2 GB free on the iPad.
   - When space runs out, the oldest days' screenshots are removed first, but only after that
     day's animation is finished. The animation stays, and so does the day in the list. Heat Map
     and Build Now are turned off for that day, because they need the screenshots.

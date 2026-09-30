@@ -77,21 +77,6 @@ struct DayList: View {
     @EnvironmentObject private var store: Store
     @Binding var selectedDayID: String?
     @Binding var showingSetup: Bool
-    @State private var pendingLimitGB: Int?  // a lower limit waiting for the user to confirm
-
-    /// Raising the limit applies at once. Lowering it below what's already used removes files, so it asks first.
-    private var storageLimit: Binding<Int> {
-        Binding(
-            get: { store.storageLimitGB },
-            set: { newLimit in
-                if Int64(newLimit) * 1_000_000_000 < store.storageUsed {
-                    pendingLimitGB = newLimit
-                } else {
-                    store.storageLimitGB = newLimit
-                }
-            }
-        )
-    }
 
     /// The date picker shows the selected day, and picking a date selects that day.
     private var jumpDate: Binding<Date> {
@@ -120,11 +105,6 @@ struct DayList: View {
 
             Section("Storage") {
                 StorageRow(used: store.storageUsed, limitGB: store.storageLimitGB, available: store.availableSpace)
-                Picker("Storage Limit", selection: storageLimit) {
-                    ForEach(StorageGuard.limitOptionsGB, id: \.self) { gigabytes in
-                        Text("\(gigabytes) GB").tag(gigabytes)
-                    }
-                }
             }
 
             Section("History") {
@@ -136,18 +116,6 @@ struct DayList: View {
         .listStyle(.insetGrouped)
         .navigationTitle("Goldie")
         .refreshable { store.refresh() }
-        .confirmationDialog(
-            "Lower the Storage Limit?",
-            isPresented: Binding(get: { pendingLimitGB != nil }, set: { if !$0 { pendingLimitGB = nil } }),
-            titleVisibility: .visible,
-            presenting: pendingLimitGB
-        ) { limit in
-            Button("Lower to \(limit) GB", role: .destructive) {
-                store.storageLimitGB = limit
-            }
-        } message: { _ in
-            Text("Goldie's files are over that limit, so the oldest screenshots (and, if needed, the oldest animations) will be removed now. This can't be undone.")
-        }
         .toolbar {
             Button("Setup", systemImage: "gearshape") { showingSetup = true }
         }
@@ -221,11 +189,8 @@ struct StorageRow: View {
                 .tint(isFull ? Color.red : Color.accentColor)
             Group {
                 if isFull {
-                    Text("Storage is full and nothing more can be removed yet. Raise the limit or free up space on the iPad.")
+                    Text("Storage is full and nothing more can be removed yet. Raise the limit in Setup, or free up space on the iPad.")
                         .foregroundStyle(.red)
-                } else {
-                    Text("When full, the oldest screenshots are removed first (their animations are kept), then the oldest animations.")
-                        .foregroundStyle(.secondary)
                 }
                 if let available {
                     Text("iPad: \(available.formatted(.byteCount(style: .file))) free")

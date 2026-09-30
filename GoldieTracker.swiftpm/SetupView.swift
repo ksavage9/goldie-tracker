@@ -5,6 +5,21 @@ import UniformTypeIdentifiers
 struct SetupView: View {
     @EnvironmentObject private var store: Store
     @State private var showingFolderPicker = false
+    @State private var pendingLimitGB: Int?  // a lower limit waiting for the user to confirm
+
+    /// Raising the limit applies at once. Lowering it below what's already used removes files, so it asks first.
+    private var storageLimit: Binding<Int> {
+        Binding(
+            get: { store.storageLimitGB },
+            set: { newLimit in
+                if Int64(newLimit) * 1_000_000_000 < store.storageUsed {
+                    pendingLimitGB = newLimit
+                } else {
+                    store.storageLimitGB = newLimit
+                }
+            }
+        )
+    }
 
     /// The Goldie Snap shortcut. `level` is the indent: 1 = inside the Repeat, 2 = inside the If.
     /// The If stops each run at 11:50 PM, so a mid-day Start or Restart never overlaps the midnight run.
@@ -109,6 +124,18 @@ struct SetupView: View {
             } header: {
                 StepHeader(number: 5, title: "Start Tracking", done: store.lastScreenshotDate != nil)
             }
+
+            Section {
+                Picker("Storage Limit", selection: storageLimit) {
+                    ForEach(StorageGuard.limitOptionsGB, id: \.self) { gigabytes in
+                        Text("\(gigabytes) GB").tag(gigabytes)
+                    }
+                }
+            } header: {
+                Text("Storage")
+            } footer: {
+                Text("Goldie's screenshots and animations are kept under this limit, and at least 2 GB is always left free on the iPad. When full, the oldest screenshots are removed first (their animations are kept), then the oldest animations. Today's screenshots are never removed.")
+            }
         }
         .listStyle(.insetGrouped)
         .navigationTitle("Setup")
@@ -117,6 +144,18 @@ struct SetupView: View {
             if case .success(let url) = result {
                 store.setFolder(url)
             }
+        }
+        .confirmationDialog(
+            "Lower the Storage Limit?",
+            isPresented: Binding(get: { pendingLimitGB != nil }, set: { if !$0 { pendingLimitGB = nil } }),
+            titleVisibility: .visible,
+            presenting: pendingLimitGB
+        ) { limit in
+            Button("Lower to \(limit) GB", role: .destructive) {
+                store.storageLimitGB = limit
+            }
+        } message: { _ in
+            Text("Goldie's files are over that limit, so the oldest screenshots (and, if needed, the oldest animations) will be removed now. This can't be undone.")
         }
     }
 }
