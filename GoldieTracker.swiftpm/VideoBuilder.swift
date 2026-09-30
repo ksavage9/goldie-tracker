@@ -125,14 +125,14 @@ enum VideoBuilder {
     /// Draws the screenshot's time (e.g. "3:05 PM", or "Sep 29, 3:05 PM" with the date) in the bottom-right corner.
     private static func drawTimestamp(_ date: Date, showsDate: Bool, in size: CGSize) {
         let text = (showsDate ? date.formatted(.dateTime.month(.abbreviated).day().hour().minute()) : date.timeText) as NSString
-        let baseFont = UIFont.monospacedDigitSystemFont(ofSize: size.height * 0.037, weight: .semibold)
+        let baseFont = UIFont.monospacedDigitSystemFont(ofSize: size.height * 0.028, weight: .semibold)
         let font = baseFont.fontDescriptor.withDesign(.rounded).map { UIFont(descriptor: $0, size: 0) } ?? baseFont
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: UIColor.white,
         ]
         let textSize = text.size(withAttributes: attributes)
-        let padding = size.height * 0.01
+        let padding = size.height * 0.0075
         let margin = padding * 2  // gap between the pill and the frame's edges
         let box = CGRect(
             x: size.width - textSize.width - padding * 2 - margin,

@@ -14,13 +14,6 @@ struct DayDetailView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
-                StatTile(title: "Screenshots", value: day.screenshots.isEmpty ? "Removed" : "\(day.screenshots.count)", systemImage: "camera.viewfinder")
-                StatTile(title: "First", value: day.screenshots.first?.date.timeText ?? "–", systemImage: "sunrise")
-                StatTile(title: "Latest", value: day.screenshots.last?.date.timeText ?? "–", systemImage: "clock")
-                StatTile(title: "Animation", value: store.videoDate(for: day)?.formatted(.relative(presentation: .named)) ?? "Not built", systemImage: "film")
-            }
-
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }

@@ -18,6 +18,7 @@ struct ContentView: View {
             } else {
                 NavigationSplitView {
                     DayList(selectedDayID: $selectedDayID, showingSetup: $showingSetup)
+                        .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 300)  // leave the map as much room as possible
                 } detail: {
                     if let day = store.days.first(where: { $0.id == selectedDayID }) {
                         DayDetailView(day: day)
@@ -236,10 +237,6 @@ struct DayRow: View {
 
             if store.isBuilding(day) {
                 ProgressView()
-            } else if store.videoDate(for: day) != nil {
-                Image(systemName: "play.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(.tint)
             }
         }
         .padding(.vertical, 4)

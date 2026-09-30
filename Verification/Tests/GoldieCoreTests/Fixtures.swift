@@ -58,6 +58,25 @@ enum Fixtures {
         return url
     }
 
+    /// Average brightness (0...1) of an area, with y measured from the top. Letters and background mix,
+    /// so this tells a dark pill from the light map even where text is drawn.
+    static func averageBrightness(of image: CGImage, x: Int, y: Int, width: Int, height: Int) -> Double {
+        let area = image.cropping(to: CGRect(x: x, y: y, width: width, height: height))!
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        pixels.withUnsafeMutableBytes { buffer in
+            let context = CGContext(
+                data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            )!
+            context.draw(area, in: CGRect(x: 0, y: 0, width: width, height: height))
+        }
+        var total = 0.0
+        for i in stride(from: 0, to: pixels.count, by: 4) {
+            total += (Double(pixels[i]) + Double(pixels[i + 1]) + Double(pixels[i + 2])) / (3 * 255)
+        }
+        return total / Double(width * height)
+    }
+
     /// Brightness (0...1) of one pixel, with y measured from the top.
     static func brightness(of image: CGImage, x: Int, y: Int) -> Double {
         var pixel = [UInt8](repeating: 0, count: 4)

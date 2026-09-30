@@ -46,7 +46,7 @@ final class VideoBuilderTests: XCTestCase {
         generator.requestedTimeToleranceAfter = .zero
         let frame = try await generator.image(at: CMTime(value: 1, timescale: 10)).image
         XCTAssertEqual(frame.width, 1280)
-        XCTAssertLessThan(Fixtures.brightness(of: frame, x: 1256, y: 905), 0.5, "dark time stamp pill in the bottom-right")
+        XCTAssertLessThan(Fixtures.brightness(of: frame, x: 1262, y: 920), 0.5, "dark time stamp pill in the bottom-right")
         XCTAssertGreaterThan(Fixtures.brightness(of: frame, x: 36, y: 890), 0.7, "nothing drawn in the bottom-left any more")
         XCTAssertGreaterThan(Fixtures.brightness(of: frame, x: 640, y: 100), 0.7, "light map background")
     }
@@ -66,11 +66,11 @@ final class VideoBuilderTests: XCTestCase {
             generator.requestedTimeToleranceAfter = .zero
             return try await generator.image(at: CMTime(value: 1, timescale: 10)).image
         }
-        // Just inside the top of the pill: left of where "3:05 PM" starts, but inside the wider "Sep 29, 3:05 PM".
+        // An area left of where "3:05 PM" starts, but inside the wider "Sep 29, 3:05 PM" pill.
         let timeOnly = try await firstFrame(showsDate: false)
         let withDate = try await firstFrame(showsDate: true)
-        XCTAssertGreaterThan(Fixtures.brightness(of: timeOnly, x: 1060, y: 884), 0.7, "a time alone leaves this spot as map")
-        XCTAssertLessThan(Fixtures.brightness(of: withDate, x: 1060, y: 884), 0.5, "the wider date-and-time pill covers it")
+        XCTAssertGreaterThan(Fixtures.averageBrightness(of: timeOnly, x: 1080, y: 905, width: 50, height: 30), 0.8, "a time alone leaves this area as map")
+        XCTAssertLessThan(Fixtures.averageBrightness(of: withDate, x: 1080, y: 905, width: 50, height: 30), 0.65, "the wider date-and-time pill covers it")
     }
 
     func testSkipsUnreadableFilesAndRejectsADayWithNone() async throws {

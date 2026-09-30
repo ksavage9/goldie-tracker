@@ -36,7 +36,7 @@ so the checklist walks you through these:
 
 ## Using the app
 
-- **Days list:** tap any day to play its animation. A ▶ icon means it's ready.
+- **Days list:** tap any day to play its animation.
 - **Jump to:** the date picker at the top of the list opens a calendar. Pick any day to go
   straight to it.
 - **Build Now / Rebuild:** makes a day's animation right away from every screenshot available
