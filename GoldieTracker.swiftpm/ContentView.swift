@@ -132,7 +132,8 @@ struct TrackingStatusRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
+        // Stacked rather than side by side: the sidebar is too narrow for the title, text and button in one row.
+        HStack(alignment: .top, spacing: 12) {
             Image(systemName: isTracking ? "location.fill" : "exclamationmark.triangle.fill")
                 .font(.body.weight(.semibold))
                 .foregroundStyle(.white)
@@ -140,26 +141,27 @@ struct TrackingStatusRow: View {
                 .background(isTracking ? Color.green : Color.red, in: RoundedRectangle(cornerRadius: 8))
                 .accessibilityHidden(true)  // the text next to it says the same
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(isTracking ? "Tracking" : "Tracking Stopped")
-                    .font(.headline)
-                Group {
-                    if let lastScreenshot {
-                        Text("Last screenshot \(lastScreenshot, style: .relative) ago")
-                    } else {
-                        Text("No screenshots saved")
+            VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(isTracking ? "Tracking" : "Tracking Stopped")
+                        .font(.headline)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Group {
+                        if let lastScreenshot {
+                            Text("Last screenshot \(lastScreenshot, style: .relative) ago")
+                        } else {
+                            Text("No screenshots saved")
+                        }
                     }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            if !isTracking {
-                Link("Restart", destination: runGoldieSnapURL)
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
+                if !isTracking {
+                    Link("Restart", destination: runGoldieSnapURL)
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                }
             }
         }
         .padding(.vertical, 2)
