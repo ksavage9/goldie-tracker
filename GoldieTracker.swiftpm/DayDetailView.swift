@@ -6,6 +6,7 @@ struct DayDetailView: View {
     let day: Day
     @State private var showingHeatmap = false
     @State private var showingCustomRange = false
+    @State private var confirmingDelete = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -51,6 +52,30 @@ struct DayDetailView: View {
             }
             .buttonStyle(.borderedProminent)
             .disabled(store.isBuilding(day) || day.screenshots.isEmpty)
+
+            if store.videoDate(for: day) != nil {
+                Menu {
+                    Button(role: .destructive) {
+                        confirmingDelete = true
+                    } label: {
+                        Label("Delete Animation", systemImage: "trash")
+                    }
+                } label: {
+                    Label("More", systemImage: "ellipsis.circle")
+                }
+                .disabled(store.isBuilding(day))
+            }
+        }
+        .confirmationDialog("Delete This Animation?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+            Button("Delete Animation", role: .destructive) {
+                store.deleteAnimation(for: day)
+            }
+        } message: {
+            if day.screenshots.isEmpty {
+                Text("Its screenshots were already removed to save space, so it can't be rebuilt, and the day will disappear from the list.")
+            } else {
+                Text("The screenshots stay, so you can rebuild it anytime with Build Now. It won't be rebuilt automatically.")
+            }
         }
         .fullScreenCover(isPresented: $showingHeatmap) {
             HeatmapView(day: day)

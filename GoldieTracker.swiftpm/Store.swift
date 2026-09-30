@@ -57,6 +57,9 @@ final class Store: ObservableObject {
     /// background (the shortcut brings Find My to the front every 5 minutes), so the daily build quietly
     /// retries after a short wait instead of showing an error every minute. Build Now always tries at once.
     private var autoBuildFailures: [String: Date] = [:]
+    /// Days whose animation was deleted while their screenshots remain. The daily build leaves them
+    /// alone, so a deleted animation stays deleted until Build Now is tapped. Saved across launches.
+    private var keepUnbuiltDayIDs: Set<String> = []
     private let autoBuildRetryDelay: TimeInterval = 15 * 60
 
     /// Bytes used by Goldie's screenshots and animations, and the iPad's free space.
@@ -76,6 +79,7 @@ final class Store: ObservableObject {
 
     private let bookmarkKey = "screenshotFolderBookmark"
     private let storageLimitKey = "storageLimitGB"
+    private let keepUnbuiltKey = "keepUnbuiltDayIDs"
     private let animationsFolder = URL.documentsDirectory.appending(path: "Animations")
     private let markerTemplateURL = URL.documentsDirectory.appending(path: "MarkerTemplate.json")
 
@@ -90,6 +94,7 @@ final class Store: ObservableObject {
         if let data = try? Data(contentsOf: markerTemplateURL) {
             markerTemplate = try? JSONDecoder().decode(MarkerTemplate.self, from: data)
         }
+        keepUnbuiltDayIDs = Set(UserDefaults.standard.stringArray(forKey: keepUnbuiltKey) ?? [])
         let savedLimit = UserDefaults.standard.integer(forKey: storageLimitKey)
         if savedLimit > 0 {
             storageLimitGB = savedLimit
@@ -254,6 +259,7 @@ final class Store: ObservableObject {
             }
             try FileManager.default.moveItem(at: partialURL, to: videoURL(for: day))
             autoBuildFailures[day.id] = nil
+            setKeepUnbuilt(false, for: day)  // built again on purpose, so it's back to normal
         } catch {
             try? FileManager.default.removeItem(at: partialURL)  // may not exist
             autoBuildFailures[day.id] = .now
@@ -283,11 +289,32 @@ final class Store: ObservableObject {
     /// The daily build: every finished day (before today) gets a complete animation.
     func buildMissingAnimations() async {
         let today = Calendar.current.startOfDay(for: .now)
-        for day in days where day.date < today && needsAnimation(day) {
+        for day in days where day.date < today && needsAnimation(day) && !keepUnbuiltDayIDs.contains(day.id) {
             if let failed = autoBuildFailures[day.id], Date.now.timeIntervalSince(failed) < autoBuildRetryDelay {
                 continue  // failed a moment ago; try again later
             }
             await build(day, showErrors: false)
+        }
+    }
+
+    /// Deletes a day's animation. If its screenshots are still here it can be rebuilt with Build Now,
+    /// but it isn't rebuilt automatically. If they were removed to save space, the day disappears.
+    func deleteAnimation(for day: Day) {
+        guard !isBuilding(day) else { return }
+        do {
+            try FileManager.default.removeItem(at: videoURL(for: day))
+        } catch {
+            errorMessage = "Couldn't delete the animation for \(day.title): \(error.localizedDescription)"
+            return
+        }
+        setKeepUnbuilt(!day.screenshots.isEmpty, for: day)
+        refresh()
+    }
+
+    private func setKeepUnbuilt(_ keep: Bool, for day: Day) {
+        let changed = keep ? keepUnbuiltDayIDs.insert(day.id).inserted : keepUnbuiltDayIDs.remove(day.id) != nil
+        if changed {
+            UserDefaults.standard.set(keepUnbuiltDayIDs.sorted(), forKey: keepUnbuiltKey)
         }
     }
 

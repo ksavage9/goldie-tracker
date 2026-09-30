@@ -42,6 +42,10 @@ so the checklist walks you through these:
 - **Build Now / Rebuild:** makes a day's animation right away from every screenshot available
   so far, including today's, then plays it. Once a day has an animation, the button says
   **Rebuild** and remakes it on demand.
+- **Delete Animation:** on a day with an animation, tap **•••** → **Delete Animation**. If the
+  day's screenshots are still saved, they stay, and the animation isn't rebuilt automatically;
+  tap **Build Now** to bring it back. If they were already removed to save space, the animation
+  can't be rebuilt, so the day disappears from the list. The app asks before deleting.
 - **Time Range:** on any day, tap **Time Range** to make an animation from exactly the stretch
   you pick, with a **From** and **To** date and time. The range can cross days (for example,
   Tuesday 6 PM to Wednesday 8 AM). When it does, each frame shows the date as well as the time.

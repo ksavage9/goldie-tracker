@@ -10,6 +10,7 @@ final class StoreTests: XCTestCase {
         try? FileManager.default.removeItem(at: animations)
         UserDefaults.standard.removeObject(forKey: "screenshotFolderBookmark")
         UserDefaults.standard.removeObject(forKey: "storageLimitGB")
+        UserDefaults.standard.removeObject(forKey: "keepUnbuiltDayIDs")
     }
 
     override func tearDown() async throws {
@@ -127,6 +128,33 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(range.map(\.date), range.map(\.date).sorted(), "oldest first, across days")
         XCTAssertEqual(store.firstScreenshotDate, twoDaysAgo8AM)
         XCTAssertTrue(store.screenshots(from: yesterday8AM + 3600, to: yesterday8AM + 7200).isEmpty)
+    }
+
+    func testDeletedAnimationStaysDeletedUntilBuildNow() async throws {
+        let calendar = Calendar.current
+        let yesterdayStart = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: .now))!
+        let folder = try Fixtures.makeTemporaryFolder("Goldie-delete")
+        for i in 0..<3 {
+            try Fixtures.write(Fixtures.screenshot(marker: nil), to: folder.appending(path: "\(i).jpg"), created: yesterdayStart + 3600 + Double(i) * 300)
+        }
+        let store = Store()
+        store.setFolder(folder)
+        await store.buildMissingAnimations()
+        var day = try XCTUnwrap(store.days.first)
+        XCTAssertNotNil(store.videoDate(for: day))
+
+        store.deleteAnimation(for: day)
+        XCTAssertNil(store.videoDate(for: day), "animation deleted")
+        XCTAssertEqual(store.days.first?.screenshots.count, 3, "screenshots kept")
+        await store.buildMissingAnimations()
+        XCTAssertNil(store.videoDate(for: day), "the daily build doesn't bring it back")
+        await Store().buildMissingAnimations()
+        XCTAssertNil(store.videoDate(for: day), "nor after a relaunch")
+
+        await store.buildNow(day.id)
+        day = try XCTUnwrap(store.days.first)
+        XCTAssertNotNil(store.videoDate(for: day), "Build Now rebuilds it")
+        XCTAssertNil(store.errorMessage)
     }
 
     private func dayID(_ date: Date) -> String {
