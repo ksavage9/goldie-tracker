@@ -1,0 +1,48 @@
+# Xcode project for the UI tour: the app's own sources (copied in by ci/prepare_tour.py) plus a UI test
+# that taps through the screens and saves screenshots.
+name: GoldieTour
+options:
+  deploymentTarget:
+    iOS: "17.0"
+targets:
+  GoldieTracker:
+    type: application
+    platform: iOS
+    sources:
+      - App
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.goldie.tracker
+        PRODUCT_NAME: Goldie Tracker
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "5.0"
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        CODE_SIGNING_ALLOWED: NO
+  GoldieTourUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - Tour
+    dependencies:
+      - target: GoldieTracker
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.0"
+        CODE_SIGNING_ALLOWED: NO
+        TEST_TARGET_NAME: GoldieTracker
+schemes:
+  GoldieTour:
+    build:
+      targets:
+        GoldieTracker: all
+        GoldieTourUITests: [test]
+    test:
+      targets:
+        - GoldieTourUITests

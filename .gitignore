@@ -2,3 +2,5 @@ GoldieTracker.zip
 .build/
 .swiftpm/
 Verification/Sources/GoldieCore/*.swift
+ci/tour/App/
+ci/tour/*.xcodeproj/

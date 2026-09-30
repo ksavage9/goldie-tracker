@@ -47,6 +47,10 @@ jobs:
       - name: Launch the real app
         run: bash ci/smoke.sh "${{ steps.sim.outputs.udid }}" "${{ runner.temp }}/app/Build/Products" "${{ runner.temp }}"
 
+      - name: Tour the app's screens
+        continue-on-error: true
+        run: bash ci/tour.sh "${{ steps.sim.outputs.udid }}" "${{ runner.temp }}"
+
       - name: Collect crash reports
         if: always()
         run: |
@@ -63,3 +67,4 @@ jobs:
             ${{ runner.temp }}/*.log
             ${{ runner.temp }}/crashes
             ${{ runner.temp }}/Tests.xcresult
+            ${{ runner.temp }}/Tour.xcresult
