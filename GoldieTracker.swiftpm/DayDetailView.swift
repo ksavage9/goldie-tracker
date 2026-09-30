@@ -239,10 +239,20 @@ struct PlayerView: View {
         .onDisappear { player?.pause() }
     }
 
-    /// Pauses and moves exactly one frame back or forward.
+    /// Pauses and moves exactly one frame back or forward. It seeks to the frame's own time rather than using
+    /// AVPlayerItem.step, which counts from the video's end time: one frame past the last screenshot, so the
+    /// first step back from the end landed on the frame already showing.
     private func step(by frames: Int) {
-        guard let player else { return }
+        guard let player, let duration = player.currentItem?.duration, duration.isNumeric else { return }
         player.pause()
-        player.currentItem?.step(byCount: frames)
+        let fps = Double(VideoBuilder.framesPerSecond)
+        let lastFrame = max(0, Int((duration.seconds * fps).rounded()) - 1)
+        let current = min(Int((player.currentTime().seconds * fps + 0.001).rounded(.down)), lastFrame)
+        let target = min(max(current + frames, 0), lastFrame)
+        player.seek(
+            to: CMTime(value: CMTimeValue(target), timescale: VideoBuilder.framesPerSecond),
+            toleranceBefore: .zero,
+            toleranceAfter: .zero
+        )
     }
 }
