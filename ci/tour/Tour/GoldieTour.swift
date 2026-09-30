@@ -30,13 +30,15 @@ final class GoldieTour: XCTestCase {
         sleep(4)
         shot("4-day-with-animation")
 
-        // Step two frames forward.
-        let nextFrame = app.buttons["Next frame"]
-        XCTAssertTrue(nextFrame.exists)
-        nextFrame.tap()
-        nextFrame.tap()
+        // The animation is short, so it has played to its last frame (7:55 AM). Step back two: 7:45 AM.
+        let before = XCUIScreen.main.screenshot().pngRepresentation
+        let previousFrame = app.buttons["Previous frame"]
+        XCTAssertTrue(previousFrame.exists)
+        previousFrame.tap()
+        previousFrame.tap()
         sleep(2)
-        shot("5-stepped-two-frames")
+        XCTAssertNotEqual(XCUIScreen.main.screenshot().pngRepresentation, before, "stepping should change the frame")
+        shot("5-stepped-back-two-frames")
 
         // The More menu with Delete Animation.
         app.buttons["More"].tap()
