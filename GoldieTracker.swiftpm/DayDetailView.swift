@@ -164,6 +164,7 @@ struct PlayerView: View {
     let url: URL
     @State private var player: AVPlayer?  // created once in onAppear, not on every redraw
     @State private var scrubTime: Double?  // where the scrubber is while it's being dragged
+    @State private var wasPlayingBeforeScrub = false
     @AppStorage("playbackSpeed") private var speed = 1.0  // remembered across days and launches
     private let speeds: [Double] = [0.25, 0.5, 1, 2, 4]
 
@@ -232,14 +233,24 @@ struct PlayerView: View {
                 value: Binding(
                     get: { scrubTime ?? player?.currentTime().seconds ?? 0 },
                     set: { time in
-                        scrubTime = time
+                        if scrubTime != nil {
+                            scrubTime = time  // only while dragging; VoiceOver adjustments just seek
+                        }
                         seek(to: time)
                     }
                 ),
                 in: 0...max(duration, 0.01),
                 onEditingChanged: { editing in
-                    if !editing {
+                    if editing {
+                        // Pause while dragging, so playback doesn't pull the frame away from your finger.
+                        wasPlayingBeforeScrub = isPlaying
+                        player?.pause()
+                        scrubTime = player?.currentTime().seconds ?? 0
+                    } else {
                         scrubTime = nil
+                        if wasPlayingBeforeScrub {
+                            player?.play()
+                        }
                     }
                 }
             )

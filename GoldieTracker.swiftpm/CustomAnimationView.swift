@@ -43,21 +43,23 @@ struct CustomAnimationView: View {
         store.screenshots(from: start, to: end).count
     }
 
-    private var summary: String {
-        guard matchingCount > 0 else { return "No screenshots in this range." }
-        let seconds = Double(matchingCount) / Double(VideoBuilder.framesPerSecond)
+    private func summary(for count: Int) -> String {
+        guard count > 0 else { return "No screenshots in this range." }
+        let seconds = Double(count) / Double(VideoBuilder.framesPerSecond)
         let length = Duration.seconds(max(1, seconds.rounded())).formatted(.units(allowed: [.minutes, .seconds], width: .abbreviated))
-        return "\(matchingCount) screenshots. Plays for about \(length) at normal speed."
+        return "\(count) screenshots. Plays for about \(length) at normal speed."
     }
 
     var body: some View {
+        // Counted once per redraw: it looks through every saved screenshot, and builds redraw for every frame.
+        let count = matchingCount
         NavigationStack {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 12) {
                     DatePicker("From", selection: $start, in: bounds)
                     // Capped at now, so the range can never run backwards (which would crash).
                     DatePicker("To", selection: $end, in: min(max(start, bounds.lowerBound), bounds.upperBound)...bounds.upperBound)
-                    Text(summary)
+                    Text(summary(for: count))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -83,7 +85,7 @@ struct CustomAnimationView: View {
                             .labelStyle(.titleAndIcon)
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(matchingCount == 0 || progress != nil)
+                    .disabled(count == 0 || progress != nil)
                 }
             }
         }
@@ -136,6 +138,8 @@ struct CustomAnimationView: View {
         errorMessage = nil
         buildingCount = screenshots.count
         progress = 0
+        store.beginReadingScreenshots()
+        defer { store.endReadingScreenshots() }
         do {
             try await VideoBuilder.makeVideo(from: screenshots, to: Self.videoURL, showsDate: spansDays) { value in
                 progress = value

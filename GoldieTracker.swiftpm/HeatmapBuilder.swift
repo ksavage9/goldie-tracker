@@ -112,10 +112,19 @@ enum HeatmapBuilder {
         let alignmentPatch = makeAlignmentPatch(from: coarse(baseGrid))
         let r = template.radius
 
-        var positions: [GridPoint] = []  // in the background screenshot's coordinates
+        // Pass 1: in each screenshot that lines up, the best match for her marker (a candidate), whether the
+        // screen changed where it is since the screenshot before (she arrived), and, once the next screenshot is
+        // in, whether it changed there afterwards (she left).
+        struct Candidate {
+            let spot: GridPoint  // in the background screenshot's coordinates
+            let score: Float
+            let arrived: Bool
+            var left = false
+            let isFirstOfDay: Bool  // nothing earlier to compare with
+        }
+        var candidates: [Candidate] = []
         var skipped = 0
         var previous: (grid: Grid, shift: GridPoint)?  // the last screenshot that lined up
-        var lastSighting: GridPoint?
         for (index, screenshot) in screenshots.enumerated() {
             try Task.checkCancellation()  // stop if the heat map screen was closed
             await onProgress(Double(index) / Double(screenshots.count))
@@ -135,22 +144,46 @@ enum HeatmapBuilder {
             let screen = loaded.grid
             defer { previous = (screen, shift) }
 
+            if let previous, let last = candidates.indices.last, !candidates[last].left {
+                let spot = candidates[last].spot
+                let here = GridPoint(x: spot.x - shift.x, y: spot.y - shift.y)
+                let before = GridPoint(x: spot.x - previous.shift.x, y: spot.y - previous.shift.y)
+                if here.x >= r, here.y >= r, here.x < screen.width - r, here.y < screen.height - r,
+                   changed(screen, at: here, comparedWith: previous.grid, at: before, radius: r) {
+                    candidates[last].left = true
+                }
+            }
+
             guard let (spot, score) = findMarker(in: screen, template) else { continue }  // she's off screen, or hidden
             let inBackground = GridPoint(x: spot.x + shift.x, y: spot.y + shift.y)
             guard (0..<gridWidth).contains(inBackground.x), (0..<height).contains(inBackground.y) else { continue }
+            let arrived = previous.map { previous in
+                changed(screen, at: spot, comparedWith: previous.grid,
+                        at: GridPoint(x: inBackground.x - previous.shift.x, y: inBackground.y - previous.shift.y), radius: r)
+            } ?? false
+            candidates.append(Candidate(spot: inBackground, score: score, arrived: arrived, isFirstOfDay: previous == nil))
+        }
 
-            // Compare with the screenshot before: a sighting in a new place only counts if something actually
-            // changed there. A look-alike that sits still (an icon or label on the map) changes nothing.
-            if let lastSighting, abs(inBackground.x - lastSighting.x) <= 2 * r, abs(inBackground.y - lastSighting.y) <= 2 * r {
-                // Same place as last time.
-            } else if let previous {
-                let before = GridPoint(x: inBackground.x - previous.shift.x, y: inBackground.y - previous.shift.y)
-                guard changed(screen, at: spot, comparedWith: previous.grid, at: before, radius: r) else { continue }
-            } else {
-                guard score >= firstSightingCorrelation else { continue }
+        // Pass 2: judge each stay at one spot as a whole. It counts if she arrived there or left it (the screen
+        // changed), or, at the start of the day with nothing earlier to compare, if it matches very closely.
+        // A look-alike that sits still never arrives or leaves, so it isn't counted.
+        var positions: [GridPoint] = []
+        var runStart = 0
+        while runStart < candidates.count {
+            var runEnd = runStart
+            while runEnd + 1 < candidates.count,
+                  abs(candidates[runEnd + 1].spot.x - candidates[runStart].spot.x) <= 2 * r,
+                  abs(candidates[runEnd + 1].spot.y - candidates[runStart].spot.y) <= 2 * r {
+                runEnd += 1
             }
-            positions.append(inBackground)
-            lastSighting = inBackground
+            let stay = candidates[runStart...runEnd]
+            let counts = stay.first!.arrived
+                || stay.contains { $0.left }
+                || (stay.first!.isFirstOfDay && stay.contains { $0.score >= firstSightingCorrelation })
+            if counts {
+                positions += stay.map(\.spot)
+            }
+            runStart = runEnd + 1
         }
         guard !positions.isEmpty else {
             throw BuildError(skipped > 0

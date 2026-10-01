@@ -102,6 +102,8 @@ struct HeatmapView: View {
             phase = .done(last.heatmap)
             return
         }
+        store.beginReadingScreenshots()
+        defer { store.endReadingScreenshots() }
         do {
             let heatmap = try await HeatmapBuilder.build(from: day.screenshots, template: template) { progress in
                 phase = .building(progress)

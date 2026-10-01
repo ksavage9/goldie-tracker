@@ -74,6 +74,9 @@ final class Store: ObservableObject {
         }
     }
     private var videoBytes: [String: Int64] = [:]  // animation file sizes, by day id
+    /// Heat maps and Time Range animations reading screenshots right now. Cleanup waits for them, so it can't
+    /// remove screenshots partway through.
+    private var screenshotReaders = 0
     /// Whether access to `folderURL` had to be started (and so must be stopped). Folders outside the app
     /// need it; folders the app can already read don't, and starting access on them just returns false.
     private var folderAccessStarted = false
@@ -298,6 +301,14 @@ final class Store: ObservableObject {
         }
     }
 
+    func beginReadingScreenshots() {
+        screenshotReaders += 1
+    }
+
+    func endReadingScreenshots() {
+        screenshotReaders -= 1
+    }
+
     /// Deletes a day's animation. If its screenshots are still here it can be rebuilt with Build Now,
     /// but it isn't rebuilt automatically. If they were removed to save space, the day disappears.
     func deleteAnimation(for day: Day) {
@@ -323,6 +334,7 @@ final class Store: ObservableObject {
     /// a finished day's screenshots (only once its animation is up to date), then, as a last resort, animations.
     /// Today, and any day still waiting for its animation, is never touched.
     func enforceStorageLimit() {
+        guard screenshotReaders == 0 else { return }  // tried again a minute later
         let today = Calendar.current.startOfDay(for: .now)
         let finishedOldestFirst = days.reversed().filter { day in
             // A day being rebuilt still needs its screenshots, even though its current animation is complete.

@@ -73,9 +73,17 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(relaunched.folderURL?.standardizedFileURL.path, folder.standardizedFileURL.path)
         XCTAssertEqual(relaunched.days.count, 3)
 
+        // While a heat map or Time Range animation is reading screenshots, cleanup waits.
+        store.beginReadingScreenshots()
+        store.storageLimitGB = 0
+        for url in files[yesterday]! + files[twoDaysAgo]! {
+            XCTAssertTrue(FileManager.default.fileExists(atPath: url.path), "nothing removed while screenshots are being read")
+        }
+        store.endReadingScreenshots()
+
         // A limit of 0 forces every step of the cleanup: finished days' screenshots, then their animations.
         // Today is never touched.
-        store.storageLimitGB = 0
+        store.enforceStorageLimit()
         for url in files[yesterday]! + files[twoDaysAgo]! {
             XCTAssertFalse(FileManager.default.fileExists(atPath: url.path), "\(url.lastPathComponent) should be removed")
         }

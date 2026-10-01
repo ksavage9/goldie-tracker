@@ -122,6 +122,19 @@ final class HeatmapBuilderTests: XCTestCase {
         XCTAssertEqual(heatmap.busiestSpot.x, home.x / Fixtures.size.width, accuracy: 0.02)
     }
 
+    /// Her marker is picked once, on one day's screenshot, then used every day. A later day matches it less
+    /// exactly. She must still be counted while she sits at home, not only once she moves.
+    func testMarkerPickedOnAnotherDayStillFindsHerAtHome() async throws {
+        let home = CGPoint(x: 600, y: 300), street = CGPoint(x: 1000, y: 750)
+        let otherDay = try screenshots([Fixtures.screenshot(marker: home, face: UIColor(red: 0.75, green: 0.42, blue: 0.05, alpha: 1))], in: "heatmap-other-day")
+        let template = try await calibrate(on: otherDay[0], tapAt: home)
+        let plan: [CGPoint?] = Array(repeating: home, count: 9) + Array(repeating: street, count: 4) + [nil, nil, nil]
+        let shots = try screenshots(plan.map { Fixtures.screenshot(marker: $0) }, in: "heatmap-at-home")
+        let heatmap = try await HeatmapBuilder.build(from: shots, template: template) { _ in }
+        XCTAssertEqual(heatmap.found, 13, "the morning at home counts, as well as the street")
+        XCTAssertEqual(heatmap.busiestSpot.x, home.x / Fixtures.size.width, accuracy: 0.02)
+    }
+
     func testTappingAPlainSpotIsRefused() async throws {
         let folder = try Fixtures.makeTemporaryFolder("heatmap-plain")
         let screenshot = try Fixtures.write(Fixtures.screenshot(marker: CGPoint(x: 600, y: 300)), to: folder.appending(path: "a.jpg"), created: .now)
