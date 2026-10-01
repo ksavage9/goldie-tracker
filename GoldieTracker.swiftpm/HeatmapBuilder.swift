@@ -270,7 +270,7 @@ enum HeatmapBuilder {
 
     // MARK: - Matching
 
-    private struct Grid {
+    struct Grid {
         let width: Int
         let height: Int
         let values: [Float]  // brightness 0...1, row by row from the top
@@ -290,7 +290,7 @@ enum HeatmapBuilder {
 
     /// The image drawn in grayscale at the given size. Drawing smaller averages the detail away, which is how
     /// the shrunken alignment grid is made.
-    private static func grid(from image: CGImage, width: Int, height: Int) -> Grid? {
+    static func grid(from image: CGImage, width: Int, height: Int) -> Grid? {
         var bytes = [UInt8](repeating: 0, count: width * height)
         let drawn = bytes.withUnsafeMutableBytes { buffer -> Bool in
             guard let context = CGContext(
@@ -323,7 +323,7 @@ enum HeatmapBuilder {
 
     /// Normalized cross-correlation of a patch at every position where it fits. `patch` pixels are measured
     /// from the patch's top-left corner, and so is the result's index. Positions that don't fit score -infinity.
-    private static func correlate(_ grid: Grid, _ patch: [MarkerTemplate.Pixel], width patchWidth: Int, height patchHeight: Int) -> [Float] {
+    static func correlate(_ grid: Grid, _ patch: [MarkerTemplate.Pixel], width patchWidth: Int, height patchHeight: Int) -> [Float] {
         let n = Float(patch.count)
         let count = grid.values.count - (patchHeight - 1) * grid.width - (patchWidth - 1)
         let mean = patch.reduce(0) { $0 + $1.value } / n

@@ -28,6 +28,46 @@ final class PerformanceTests: XCTestCase {
         XCTAssertLessThan(perScreenshot, 1.5, "a day of 288 screenshots should take a few minutes at most, even on a slow simulator")
     }
 
+    /// Breaks a heat map's cost per screenshot down: decoding, making the grids, finding her marker on the
+    /// full grid, and the alignment search on the coarse grid (only needed when the map moved).
+    func testHeatMapCostBreakdown() throws {
+        let shots = try fullSizeDay("perf-heat-parts", count: 12)
+        func time(_ label: String, _ work: () -> Void) {
+            let start = Date()
+            for _ in 0..<12 { work() }
+            print("PERF heat map \(label): \(String(format: "%.1f", Date().timeIntervalSince(start) / 12 * 1000)) ms")
+        }
+        var image: CGImage?
+        var index = 0
+        time("decode at 640") {
+            image = ImageFile.downsampled(shots[index % 12].url, maxPixelSize: 640)
+            index += 1
+        }
+        let decoded = try XCTUnwrap(image)
+        var grid: HeatmapBuilder.Grid?
+        time("full and coarse grids") {
+            grid = HeatmapBuilder.grid(from: decoded, width: 640, height: 480)
+            _ = HeatmapBuilder.grid(from: decoded, width: 160, height: 120)
+        }
+        let screen = try XCTUnwrap(grid)
+        let coarse = try XCTUnwrap(HeatmapBuilder.grid(from: decoded, width: 160, height: 120))
+        let r = 7
+        var disc: [MarkerTemplate.Pixel] = []
+        for dy in -r...r {
+            for dx in -r...r where dx * dx + dy * dy <= r * r {
+                disc.append(.init(dx: dx + r, dy: dy + r, value: screen[320 + dx, 240 + dy]))
+            }
+        }
+        time("marker search") { _ = HeatmapBuilder.correlate(screen, disc, width: 2 * r + 1, height: 2 * r + 1) }
+        var block: [MarkerTemplate.Pixel] = []
+        for dy in stride(from: 0, to: 72, by: 2) {
+            for dx in stride(from: 0, to: 64, by: 2) {
+                block.append(.init(dx: dx, dy: dy, value: coarse[70 + dx, 26 + dy]))
+            }
+        }
+        time("alignment search") { _ = HeatmapBuilder.correlate(coarse, block, width: 64, height: 72) }
+    }
+
     /// A month of screenshots (30 days × 288) is about 8,640 files. Scanning them runs on the main thread every
     /// minute, so it must stay quick.
     func testFolderScanSpeedWithAMonthOfScreenshots() throws {
