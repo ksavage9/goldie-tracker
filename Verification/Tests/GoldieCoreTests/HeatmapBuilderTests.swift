@@ -37,8 +37,8 @@ final class HeatmapBuilderTests: XCTestCase {
         XCTAssertEqual(decoded.decoys, template.decoys)
     }
 
-    /// The fast correlation (running totals for the sums) must give the same scores as working each position
-    /// out directly, for her marker's disc and for the every-other-pixel alignment block.
+    /// The vectorized correlation must give the same scores as working each position out directly, for her
+    /// marker's disc and for the every-other-pixel alignment block.
     func testFastCorrelationMatchesTheDirectCalculation() throws {
         let image = try XCTUnwrap(Fixtures.screenshot(marker: CGPoint(x: 600, y: 300)).cgImage)
         let grid = try XCTUnwrap(HeatmapBuilder.grid(from: image, width: 200, height: 150))

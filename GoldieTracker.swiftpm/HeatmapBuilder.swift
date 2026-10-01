@@ -355,19 +355,29 @@ enum HeatmapBuilder {
         let mean = patch.reduce(0) { $0 + $1.value } / n
         let weights = patch.map { $0.value - mean }  // the patch with its average brightness removed
         let templateNorm = weights.reduce(0) { $0 + $1 * $1 }.squareRoot()
+        let squares = vDSP.multiply(grid.values, grid.values)
         var products = [Float](repeating: 0, count: count)
+        var sums = [Float](repeating: 0, count: count)
+        var sumsOfSquares = [Float](repeating: 0, count: count)
 
-        // One vectorized pass per patch pixel, adding up the screen under the patch weighted by the pattern.
+        // One vectorized pass per marker pixel, adding up the screen under the marker three ways.
         grid.values.withUnsafeBufferPointer { values in
-            products.withUnsafeMutableBufferPointer { products in
-                for (pixel, weight) in zip(patch, weights) {
-                    let offset = pixel.dy * grid.width + pixel.dx
-                    var weight = weight
-                    vDSP_vsma(values.baseAddress! + offset, 1, &weight, products.baseAddress!, 1, products.baseAddress!, 1, vDSP_Length(count))
+            squares.withUnsafeBufferPointer { squares in
+                products.withUnsafeMutableBufferPointer { products in
+                    sums.withUnsafeMutableBufferPointer { sums in
+                        sumsOfSquares.withUnsafeMutableBufferPointer { sumsOfSquares in
+                            for (pixel, weight) in zip(patch, weights) {
+                                let offset = pixel.dy * grid.width + pixel.dx
+                                var weight = weight
+                                vDSP_vsma(values.baseAddress! + offset, 1, &weight, products.baseAddress!, 1, products.baseAddress!, 1, vDSP_Length(count))
+                                vDSP_vadd(values.baseAddress! + offset, 1, sums.baseAddress!, 1, sums.baseAddress!, 1, vDSP_Length(count))
+                                vDSP_vadd(squares.baseAddress! + offset, 1, sumsOfSquares.baseAddress!, 1, sumsOfSquares.baseAddress!, 1, vDSP_Length(count))
+                            }
+                        }
+                    }
                 }
             }
         }
-        let (sums, sumsOfSquares) = sumsUnder(patch, in: grid, count: count)
 
         // correlation = products / (templateNorm × √(the screen's spread under the marker)). The spread has a
         // floor, so a plain area's tiny noise can't be divided into a high score.
@@ -384,56 +394,6 @@ enum HeatmapBuilder {
             rowStart += grid.width
         }
         return scores
-    }
-
-    /// The screen's brightness, and brightness squared, added up under the patch at every position.
-    /// Each row of the patch is evenly spaced pixels (a disc's row, or every other pixel of a block), so a row's
-    /// total is the difference of two running totals: four passes per row instead of two per pixel. The totals
-    /// are kept in Double, so long sums don't lose the small differences that tell a plain area from a busy one.
-    private static func sumsUnder(_ patch: [MarkerTemplate.Pixel], in grid: Grid, count: Int) -> (sums: [Float], sumsOfSquares: [Float]) {
-        let rows = Dictionary(grouping: patch, by: \.dy).mapValues { $0.map(\.dx).sorted() }
-        let step = rows.values.flatMap { zip($0, $0.dropFirst()).map { $1 - $0 } }.min() ?? 1
-        let values = vDSP.floatToDouble(grid.values)
-        let running = runningTotals(values, step: step)
-        let runningSquares = runningTotals(vDSP.square(values), step: step)
-        var sums = [Double](repeating: 0, count: count)
-        var sumsOfSquares = sums
-        for (dy, dxs) in rows {
-            precondition(dxs.last! - dxs.first! == (dxs.count - 1) * step, "each row of a patch must be evenly spaced")
-            let first = dy * grid.width + dxs.first!, end = dy * grid.width + dxs.last! + step
-            add(running, from: first, to: end, into: &sums)
-            add(runningSquares, from: first, to: end, into: &sumsOfSquares)
-        }
-        return (vDSP.doubleToFloat(sums), vDSP.doubleToFloat(sumsOfSquares))
-    }
-
-    /// totals[i + step] = totals[i] + values[i], so the evenly spaced values from `first` to `last` add up to
-    /// totals[last + step] − totals[first].
-    private static func runningTotals(_ values: [Double], step: Int) -> [Double] {
-        let padded = [Double](repeating: 0, count: step) + values
-        var totals = [Double](repeating: 0, count: padded.count)
-        var one = 1.0
-        padded.withUnsafeBufferPointer { padded in
-            totals.withUnsafeMutableBufferPointer { totals in
-                // One running sum for each of the `step` interleaved sequences. Each starts on a padding zero.
-                for start in 0..<step {
-                    let length = (padded.count - start + step - 1) / step
-                    vDSP_vrsumD(padded.baseAddress! + start, step, &one, totals.baseAddress! + start, step, vDSP_Length(length))
-                }
-            }
-        }
-        return totals
-    }
-
-    /// result[i] += totals[end + i] − totals[first + i], at every position.
-    private static func add(_ totals: [Double], from first: Int, to end: Int, into result: inout [Double]) {
-        let count = vDSP_Length(result.count)
-        totals.withUnsafeBufferPointer { totals in
-            result.withUnsafeMutableBufferPointer { result in
-                vDSP_vaddD(totals.baseAddress! + end, 1, result.baseAddress!, 1, result.baseAddress!, 1, count)
-                vDSP_vsubD(totals.baseAddress! + first, 1, result.baseAddress!, 1, result.baseAddress!, 1, count)  // result − totals
-            }
-        }
     }
 
     // MARK: - Lining screenshots up
