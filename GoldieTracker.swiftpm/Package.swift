@@ -13,8 +13,8 @@ let package = Package(
             name: "Goldie Tracker",
             targets: ["AppModule"],
             bundleIdentifier: "com.goldie.tracker",
-            displayVersion: "1.3.1",
-            bundleVersion: "4",
+            displayVersion: "1.3.2",
+            bundleVersion: "5",
             appIcon: .asset("AppIcon"),
             accentColor: .presetColor(.orange),
             supportedDeviceFamilies: [
