@@ -284,6 +284,18 @@ final class Store: ObservableObject {
         return calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
     }
 
+    /// Every screenshot taken between two moments (inclusive), oldest first, across days.
+    func screenshots(from start: Date, to end: Date) -> [Screenshot] {
+        days.flatMap(\.screenshots)
+            .filter { $0.date >= start && $0.date <= end }
+            .sorted { $0.date < $1.date }
+    }
+
+    /// When the oldest screenshot still saved was taken.
+    var firstScreenshotDate: Date? {
+        days.compactMap { $0.screenshots.first?.date }.min()
+    }
+
     var lastScreenshotDate: Date? {
         days.lazy.compactMap { $0.screenshots.last?.date }.first
     }
