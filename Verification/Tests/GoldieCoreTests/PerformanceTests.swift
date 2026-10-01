@@ -2,8 +2,9 @@ import AVFoundation
 import XCTest
 @testable import GoldieCore
 
-/// Times the two heavy jobs on full-size (2732 × 2048) screenshots, like a real iPad's, and prints the cost per
-/// screenshot so changes can be compared run to run. The limits are generous: GitHub's simulators vary a lot.
+/// Times the heavy jobs on full-size (2732 × 2048) screenshots, like a real iPad's, and prints the cost per
+/// screenshot so changes can be compared run to run. The limits only catch big slowdowns: the same code has
+/// timed up to 8× slower on one GitHub machine than on another.
 @MainActor
 final class PerformanceTests: XCTestCase {
     private let fullSize = CGSize(width: 2732, height: 2048)
@@ -68,8 +69,8 @@ final class PerformanceTests: XCTestCase {
         time("alignment search") { _ = HeatmapBuilder.correlate(coarse, block, width: 64, height: 72) }
     }
 
-    /// A month of screenshots (30 days × 288) is about 8,640 files. Scanning them runs on the main thread every
-    /// minute, so it must stay quick.
+    /// A month of screenshots (30 days × 288) is about 8,640 files. The scan every minute runs in the background,
+    /// but the one at launch and after a deletion runs on the main thread, so it must stay quick.
     func testFolderScanSpeedWithAMonthOfScreenshots() throws {
         let folder = try Fixtures.makeTemporaryFolder("perf-month")
         let today = Calendar.current.startOfDay(for: .now)
@@ -92,7 +93,7 @@ final class PerformanceTests: XCTestCase {
         }
         let perScan = Date().timeIntervalSince(start) / 5
         print("PERF folder scan: \(Int(perScan * 1000)) ms for 8,640 screenshots")
-        XCTAssertLessThan(perScan, 0.5, "this runs on the main thread every minute")
+        XCTAssertLessThan(perScan, 3, "the scan at launch runs on the main thread")
         UserDefaults.standard.removeObject(forKey: "screenshotFolderBookmark")
     }
 
@@ -119,7 +120,7 @@ final class PerformanceTests: XCTestCase {
         for shot in large { _ = VideoBuilder.makeFrame(shot, size: CGSize(width: 1280, height: 958), showsDate: false, pool: pool) }
         let drawPerFrame = Date().timeIntervalSince(start) / 12
         print("PERF draw one frame from a 2732-wide screenshot: \(Int(drawPerFrame * 1000)) ms")
-        XCTAssertLessThan(drawPerFrame, 1.0, "the app's own share of each frame; the rest is the encoder")
+        XCTAssertLessThan(drawPerFrame, 2, "the app's own share of each frame; the rest is the encoder")
 
         let output = FileManager.default.temporaryDirectory.appending(path: "perf-\(UUID().uuidString).mp4")
         start = Date()
