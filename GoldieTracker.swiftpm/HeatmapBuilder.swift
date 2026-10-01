@@ -49,6 +49,8 @@ enum HeatmapBuilder {
     static let alignmentScale = 4
     /// How closely a screenshot's map must match the background's to be lined up with it.
     static let minimumAlignment: Float = 0.7
+    /// A screenshot whose map matches the background this well where it stands hasn't moved, so no search is needed.
+    static let unmovedCorrelation: Float = 0.95
     static let minutesPerScreenshot = 5
 
     /// Heat colors from cool to hot, shared by the overlay and the legend.
@@ -379,8 +381,9 @@ enum HeatmapBuilder {
         let x = coarseBase.width * 44 / 100, width = coarseBase.width * 40 / 100
         let y = coarseBase.height * 22 / 100, height = coarseBase.height * 60 / 100
         var pixels: [MarkerTemplate.Pixel] = []
-        for dy in 0..<height {
-            for dx in 0..<width {
+        // Every other pixel each way: plenty to find the map's position, and a quarter of the work.
+        for dy in stride(from: 0, to: height, by: 2) {
+            for dx in stride(from: 0, to: width, by: 2) {
                 pixels.append(.init(dx: dx, dy: dy, value: coarseBase[x + dx, y + dy]))
             }
         }
@@ -393,10 +396,31 @@ enum HeatmapBuilder {
     /// How far to move a screenshot's points (in grid pixels) to land on the same map spot in the background,
     /// or nil when its map doesn't line up: zoomed, moved too far, or not showing the map.
     private static func align(_ coarseGrid: Grid, with patch: AlignmentPatch) -> GridPoint? {
+        // Usually the map hasn't moved. Checking that one position first is far cheaper than searching everywhere.
+        if correlationInPlace(coarseGrid, patch) >= unmovedCorrelation {
+            return GridPoint(x: 0, y: 0)
+        }
         let (index, score) = vDSP.indexOfMaximum(correlate(coarseGrid, patch.pixels, width: patch.width, height: patch.height))
         guard score >= minimumAlignment else { return nil }
         let foundX = Int(index) % coarseGrid.width, foundY = Int(index) / coarseGrid.width
         return GridPoint(x: (patch.x - foundX) * alignmentScale, y: (patch.y - foundY) * alignmentScale)
+    }
+
+    /// How well the patch matches the screen at the same position it came from (-1...1).
+    private static func correlationInPlace(_ grid: Grid, _ patch: AlignmentPatch) -> Float {
+        guard patch.x + patch.width <= grid.width, patch.y + patch.height <= grid.height else { return -1 }
+        let n = Float(patch.pixels.count)
+        let screen = patch.pixels.map { grid[patch.x + $0.dx, patch.y + $0.dy] }
+        let patchMean = patch.pixels.reduce(0) { $0 + $1.value } / n
+        let screenMean = screen.reduce(0, +) / n
+        var products: Float = 0, patchSquares: Float = 0, screenSquares: Float = 0
+        for (pixel, value) in zip(patch.pixels, screen) {
+            let a = pixel.value - patchMean, b = value - screenMean
+            products += a * b
+            patchSquares += a * a
+            screenSquares += b * b
+        }
+        return products / max((patchSquares * screenSquares).squareRoot(), .leastNonzeroMagnitude)
     }
 
     /// Whether the screen changed at a spot between two screenshots: something appeared, left or moved there.
