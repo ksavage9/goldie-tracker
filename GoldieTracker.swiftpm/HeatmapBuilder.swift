@@ -106,12 +106,10 @@ enum HeatmapBuilder {
             throw BuildError("No readable screenshots for this day.")
         }
         let height = gridHeight(for: base)
-        let coarseWidth = gridWidth / alignmentScale, coarseHeight = height / alignmentScale
         // Every screenshot, the background included, is decoded straight at grid size, the same way, so their
         // grids compare fairly; that's also much faster than decoding the full screenshot.
-        let maxPixelSize = max(gridWidth, height)
-        guard let baseImage = ImageFile.downsampled(baseScreenshot.url, maxPixelSize: maxPixelSize),
-              let coarseBase = grid(from: baseImage, width: coarseWidth, height: coarseHeight) else {
+        guard let baseImage = ImageFile.downsampled(baseScreenshot.url, maxPixelSize: max(gridWidth, height)),
+              let coarseBase = grid(from: baseImage, width: gridWidth / alignmentScale, height: height / alignmentScale) else {
             throw BuildError("Couldn't read the day's screenshots.")
         }
         // The heat is drawn over the day's last screenshot. Each screenshot is lined up with it first, so a
@@ -132,45 +130,55 @@ enum HeatmapBuilder {
         var candidates: [Candidate] = []
         var skipped = 0
         var previous: (grid: Grid, shift: GridPoint)?  // the last screenshot that lined up
-        for (index, screenshot) in screenshots.enumerated() {
+        // Reading a screenshot, lining it up and finding her marker in it don't depend on any other screenshot,
+        // so a batch of them runs at once, one per processor core. Only the comparisons with the screenshot
+        // before have to go in order, below.
+        let batchSize = max(2, ProcessInfo.processInfo.activeProcessorCount)
+        for batchStart in stride(from: 0, to: screenshots.count, by: batchSize) {
             try Task.checkCancellation()  // stop if the heat map screen was closed
-            await onProgress(Double(index) / Double(screenshots.count))
-            let loaded = autoreleasepool { () -> (grid: Grid, shift: GridPoint?)? in
-                // Self.grid: a plain `grid(...)` after `let grid` would mean the local value, not the function.
-                guard let image = ImageFile.downsampled(screenshot.url, maxPixelSize: maxPixelSize),
-                      let grid = Self.grid(from: image, width: gridWidth, height: height),
-                      let coarseGrid = Self.grid(from: image, width: coarseWidth, height: coarseHeight) else { return nil }
-                // A plain background can't be lined up, so screenshots are then taken as they are.
-                let shift = alignmentPatch.map { align(coarseGrid, with: $0) } ?? GridPoint(x: 0, y: 0)
-                return (grid, shift)
-            }
-            guard let loaded else { continue }  // unreadable file
-            guard let shift = loaded.shift else {
-                skipped += 1  // zoomed, moved too far, or not the map at all
-                continue
-            }
-            // Not called `grid`: that name inside the closure above would then mean this, not the grid(for:) function.
-            let screen = loaded.grid
-            defer { previous = (screen, shift) }
-
-            if let previous, let last = candidates.indices.last, !candidates[last].left {
-                let spot = candidates[last].spot
-                let here = GridPoint(x: spot.x - shift.x, y: spot.y - shift.y)
-                let before = GridPoint(x: spot.x - previous.shift.x, y: spot.y - previous.shift.y)
-                if here.x >= r, here.y >= r, here.x < screen.width - r, here.y < screen.height - r,
-                   changed(screen, at: here, comparedWith: previous.grid, at: before, radius: r) {
-                    candidates[last].left = true
+            await onProgress(Double(batchStart) / Double(screenshots.count))
+            let batch = screenshots[batchStart..<min(batchStart + batchSize, screenshots.count)]
+            let loadedBatch = await withTaskGroup(of: (Int, Loaded?).self) { group in
+                for (offset, screenshot) in batch.enumerated() {
+                    group.addTask {
+                        (offset, Self.load(screenshot, height: height, alignmentPatch: alignmentPatch, template: template))
+                    }
                 }
+                var results = [Loaded?](repeating: nil, count: batch.count)
+                for await (offset, loaded) in group {
+                    results[offset] = loaded
+                }
+                return results
             }
 
-            guard let (spot, score) = findMarker(in: screen, template) else { continue }  // she's off screen, or hidden
-            let inBackground = GridPoint(x: spot.x + shift.x, y: spot.y + shift.y)
-            guard (0..<gridWidth).contains(inBackground.x), (0..<height).contains(inBackground.y) else { continue }
-            let arrived = previous.map { previous in
-                changed(screen, at: spot, comparedWith: previous.grid,
-                        at: GridPoint(x: inBackground.x - previous.shift.x, y: inBackground.y - previous.shift.y), radius: r)
-            } ?? false
-            candidates.append(Candidate(spot: inBackground, score: score, arrived: arrived, isFirstOfDay: previous == nil))
+            for loaded in loadedBatch {
+                guard let loaded else { continue }  // unreadable file
+                guard let shift = loaded.shift else {
+                    skipped += 1  // zoomed, moved too far, or not the map at all
+                    continue
+                }
+                let screen = loaded.grid
+                defer { previous = (screen, shift) }
+
+                if let previous, let last = candidates.indices.last, !candidates[last].left {
+                    let spot = candidates[last].spot
+                    let here = GridPoint(x: spot.x - shift.x, y: spot.y - shift.y)
+                    let before = GridPoint(x: spot.x - previous.shift.x, y: spot.y - previous.shift.y)
+                    if here.x >= r, here.y >= r, here.x < screen.width - r, here.y < screen.height - r,
+                       changed(screen, at: here, comparedWith: previous.grid, at: before, radius: r) {
+                        candidates[last].left = true
+                    }
+                }
+
+                guard let (spot, score) = loaded.marker else { continue }  // she's off screen, or hidden
+                let inBackground = GridPoint(x: spot.x + shift.x, y: spot.y + shift.y)
+                guard (0..<gridWidth).contains(inBackground.x), (0..<height).contains(inBackground.y) else { continue }
+                let arrived = previous.map { previous in
+                    changed(screen, at: spot, comparedWith: previous.grid,
+                            at: GridPoint(x: inBackground.x - previous.shift.x, y: inBackground.y - previous.shift.y), radius: r)
+                } ?? false
+                candidates.append(Candidate(spot: inBackground, score: score, arrived: arrived, isFirstOfDay: previous == nil))
+            }
         }
 
         // Pass 2: judge each stay at one spot as a whole. It counts if she arrived there or left it (the screen
@@ -230,6 +238,24 @@ enum HeatmapBuilder {
             busiestSpot: CGPoint(x: (Double(peak.x) + 0.5) / Double(gridWidth), y: (Double(peak.y) + 0.5) / Double(height)),
             busiestSpotMinutes: nearPeak * minutesPerScreenshot
         )
+    }
+
+    /// One screenshot, read and lined up with the background, and the best match for her marker in it.
+    private struct Loaded {
+        let grid: Grid
+        let shift: GridPoint?  // nil when it doesn't line up
+        let marker: (spot: GridPoint, score: Float)?  // in the screenshot's own coordinates
+    }
+
+    private static func load(_ screenshot: Screenshot, height: Int, alignmentPatch: AlignmentPatch?, template: MarkerTemplate) -> Loaded? {
+        autoreleasepool {
+            guard let image = ImageFile.downsampled(screenshot.url, maxPixelSize: max(gridWidth, height)),
+                  let screen = grid(from: image, width: gridWidth, height: height),
+                  let coarse = grid(from: image, width: gridWidth / alignmentScale, height: height / alignmentScale) else { return nil }
+            // A plain background can't be lined up, so screenshots are then taken as they are.
+            let shift = alignmentPatch.map { align(coarse, with: $0) } ?? GridPoint(x: 0, y: 0)
+            return Loaded(grid: screen, shift: shift, marker: shift == nil ? nil : findMarker(in: screen, template))
+        }
     }
 
     /// Largest side of the background image shown on screen: sharp on an iPad, and decoded in the background
@@ -329,29 +355,19 @@ enum HeatmapBuilder {
         let mean = patch.reduce(0) { $0 + $1.value } / n
         let weights = patch.map { $0.value - mean }  // the patch with its average brightness removed
         let templateNorm = weights.reduce(0) { $0 + $1 * $1 }.squareRoot()
-        let squares = vDSP.multiply(grid.values, grid.values)
         var products = [Float](repeating: 0, count: count)
-        var sums = [Float](repeating: 0, count: count)
-        var sumsOfSquares = [Float](repeating: 0, count: count)
 
-        // One vectorized pass per marker pixel, adding up the screen under the marker three ways.
+        // One vectorized pass per patch pixel, adding up the screen under the patch weighted by the pattern.
         grid.values.withUnsafeBufferPointer { values in
-            squares.withUnsafeBufferPointer { squares in
-                products.withUnsafeMutableBufferPointer { products in
-                    sums.withUnsafeMutableBufferPointer { sums in
-                        sumsOfSquares.withUnsafeMutableBufferPointer { sumsOfSquares in
-                            for (pixel, weight) in zip(patch, weights) {
-                                let offset = pixel.dy * grid.width + pixel.dx
-                                var weight = weight
-                                vDSP_vsma(values.baseAddress! + offset, 1, &weight, products.baseAddress!, 1, products.baseAddress!, 1, vDSP_Length(count))
-                                vDSP_vadd(values.baseAddress! + offset, 1, sums.baseAddress!, 1, sums.baseAddress!, 1, vDSP_Length(count))
-                                vDSP_vadd(squares.baseAddress! + offset, 1, sumsOfSquares.baseAddress!, 1, sumsOfSquares.baseAddress!, 1, vDSP_Length(count))
-                            }
-                        }
-                    }
+            products.withUnsafeMutableBufferPointer { products in
+                for (pixel, weight) in zip(patch, weights) {
+                    let offset = pixel.dy * grid.width + pixel.dx
+                    var weight = weight
+                    vDSP_vsma(values.baseAddress! + offset, 1, &weight, products.baseAddress!, 1, products.baseAddress!, 1, vDSP_Length(count))
                 }
             }
         }
+        let (sums, sumsOfSquares) = sumsUnder(patch, in: grid, count: count)
 
         // correlation = products / (templateNorm × √(the screen's spread under the marker)). The spread has a
         // floor, so a plain area's tiny noise can't be divided into a high score.
@@ -368,6 +384,56 @@ enum HeatmapBuilder {
             rowStart += grid.width
         }
         return scores
+    }
+
+    /// The screen's brightness, and brightness squared, added up under the patch at every position.
+    /// Each row of the patch is evenly spaced pixels (a disc's row, or every other pixel of a block), so a row's
+    /// total is the difference of two running totals: four passes per row instead of two per pixel. The totals
+    /// are kept in Double, so long sums don't lose the small differences that tell a plain area from a busy one.
+    private static func sumsUnder(_ patch: [MarkerTemplate.Pixel], in grid: Grid, count: Int) -> (sums: [Float], sumsOfSquares: [Float]) {
+        let rows = Dictionary(grouping: patch, by: \.dy).mapValues { $0.map(\.dx).sorted() }
+        let step = rows.values.flatMap { zip($0, $0.dropFirst()).map { $1 - $0 } }.min() ?? 1
+        let values = vDSP.floatToDouble(grid.values)
+        let running = runningTotals(values, step: step)
+        let runningSquares = runningTotals(vDSP.square(values), step: step)
+        var sums = [Double](repeating: 0, count: count)
+        var sumsOfSquares = sums
+        for (dy, dxs) in rows {
+            precondition(dxs.last! - dxs.first! == (dxs.count - 1) * step, "each row of a patch must be evenly spaced")
+            let first = dy * grid.width + dxs.first!, end = dy * grid.width + dxs.last! + step
+            add(running, from: first, to: end, into: &sums)
+            add(runningSquares, from: first, to: end, into: &sumsOfSquares)
+        }
+        return (vDSP.doubleToFloat(sums), vDSP.doubleToFloat(sumsOfSquares))
+    }
+
+    /// totals[i + step] = totals[i] + values[i], so the evenly spaced values from `first` to `last` add up to
+    /// totals[last + step] − totals[first].
+    private static func runningTotals(_ values: [Double], step: Int) -> [Double] {
+        let padded = [Double](repeating: 0, count: step) + values
+        var totals = [Double](repeating: 0, count: padded.count)
+        var one = 1.0
+        padded.withUnsafeBufferPointer { padded in
+            totals.withUnsafeMutableBufferPointer { totals in
+                // One running sum for each of the `step` interleaved sequences. Each starts on a padding zero.
+                for start in 0..<step {
+                    let length = (padded.count - start + step - 1) / step
+                    vDSP_vrsumD(padded.baseAddress! + start, step, &one, totals.baseAddress! + start, step, vDSP_Length(length))
+                }
+            }
+        }
+        return totals
+    }
+
+    /// result[i] += totals[end + i] − totals[first + i], at every position.
+    private static func add(_ totals: [Double], from first: Int, to end: Int, into result: inout [Double]) {
+        let count = vDSP_Length(result.count)
+        totals.withUnsafeBufferPointer { totals in
+            result.withUnsafeMutableBufferPointer { result in
+                vDSP_vaddD(totals.baseAddress! + end, 1, result.baseAddress!, 1, result.baseAddress!, 1, count)
+                vDSP_vsubD(totals.baseAddress! + first, 1, result.baseAddress!, 1, result.baseAddress!, 1, count)  // result − totals
+            }
+        }
     }
 
     // MARK: - Lining screenshots up

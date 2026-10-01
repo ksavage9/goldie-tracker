@@ -37,6 +37,49 @@ final class HeatmapBuilderTests: XCTestCase {
         XCTAssertEqual(decoded.decoys, template.decoys)
     }
 
+    /// The fast correlation (running totals for the sums) must give the same scores as working each position
+    /// out directly, for her marker's disc and for the every-other-pixel alignment block.
+    func testFastCorrelationMatchesTheDirectCalculation() throws {
+        let image = try XCTUnwrap(Fixtures.screenshot(marker: CGPoint(x: 600, y: 300)).cgImage)
+        let grid = try XCTUnwrap(HeatmapBuilder.grid(from: image, width: 200, height: 150))
+        var disc: [MarkerTemplate.Pixel] = []
+        for dy in -4...4 {
+            for dx in -4...4 where dx * dx + dy * dy <= 16 {
+                disc.append(.init(dx: dx + 4, dy: dy + 4, value: grid[88 + dx, 44 + dy]))
+            }
+        }
+        var block: [MarkerTemplate.Pixel] = []
+        for dy in stride(from: 0, to: 40, by: 2) {
+            for dx in stride(from: 0, to: 36, by: 2) {
+                block.append(.init(dx: dx, dy: dy, value: grid[80 + dx, 30 + dy]))
+            }
+        }
+        for (patch, width, height) in [(disc, 9, 9), (block, 36, 40)] {
+            let fast = HeatmapBuilder.correlate(grid, patch, width: width, height: height)
+            let n = Double(patch.count)
+            let mean = patch.reduce(0) { $0 + Double($1.value) } / n
+            let norm = patch.reduce(0) { $0 + (Double($1.value) - mean) * (Double($1.value) - mean) }.squareRoot()
+            var compared = 0, worst = 0.0
+            for y in 0...(grid.height - height) {
+                for x in 0...(grid.width - width) {
+                    var product = 0.0, sum = 0.0, sumOfSquares = 0.0
+                    for pixel in patch {
+                        let value = Double(grid[x + pixel.dx, y + pixel.dy])
+                        product += (Double(pixel.value) - mean) * value
+                        sum += value
+                        sumOfSquares += value * value
+                    }
+                    let spread = max(sumOfSquares - sum * sum / n, n * Double(HeatmapBuilder.minimumVariance))
+                    let direct = product / (norm * spread.squareRoot())
+                    worst = max(worst, abs(Double(fast[y * grid.width + x]) - direct))
+                    compared += 1
+                }
+            }
+            XCTAssertGreaterThan(compared, 10_000)
+            XCTAssertLessThan(worst, 0.001, "\(patch.count)-pixel patch")
+        }
+    }
+
     /// A golden cat's marker is nearly as light as the map in grayscale. The old brightness-difference
     /// matching "found" her on plain patches of map in screenshots where she was off screen.
     func testALightColoredMarkerIsNotFoundOnPlainMap() async throws {
