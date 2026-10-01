@@ -22,7 +22,9 @@ To use the app later, open Swift Playgrounds → Goldie Tracker → ▶.
 
 **If the app shows a black screen:** Swift Playgrounds stops the app while another app is in
 front, and the shortcut brings Find My to the front every 5 minutes. When you come back, tap
-**▶ Run** to start it again. Your folder, settings and animations are saved.
+**▶ Run** to start it again. Your folder, settings and animations are saved. If ▶ Run doesn't
+bring it back, close Swift Playgrounds (swipe it up from the app switcher) and open it again;
+that usually means iPadOS shut the app down, for example to free memory.
 
 ## What Apple requires you to do by hand
 

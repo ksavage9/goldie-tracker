@@ -1,3 +1,4 @@
+import ImageIO
 import SwiftUI
 
 let openShortcutsURL = URL(string: "shortcuts://")!
@@ -268,14 +269,25 @@ struct ThumbnailView: View {
             .accessibilityHidden(true)  // decorative; the row's text says which day it is
             .task(id: url) {
                 // The old thumbnail stays up until the new one is ready, so today's row doesn't flicker every 5 minutes.
-                guard let url, let full = UIImage(contentsOfFile: url.path), full.size.width > 0, full.size.height > 0 else {
+                guard let url else {
                     image = nil
                     return
                 }
-                // byPreparingThumbnail stretches to the exact size it's given, so keep the screenshot's
-                // shape and just make it big enough to fill the 72×54 frame at 3x.
-                let scale = max(216 / full.size.width, 162 / full.size.height)
-                image = await full.byPreparingThumbnail(ofSize: CGSize(width: full.size.width * scale, height: full.size.height * scale))
+                image = await Self.thumbnail(of: url)
             }
+    }
+
+    /// Reads a small version straight from the file, keeping the screenshot's shape. Opening the full screenshot
+    /// first (2732 × 2048, about 22 MB in memory) for every row at once could use enough memory to get the app shut down.
+    nonisolated private static func thumbnail(of url: URL) async -> UIImage? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: 288,  // fills the 72×54 frame at 3x
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+        ]
+        guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+        return UIImage(cgImage: thumbnail)
     }
 }
