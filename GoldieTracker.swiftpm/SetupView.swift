@@ -107,10 +107,20 @@ struct SetupView: View {
             }
 
             Section {
-                Text("Tap Start. If you haven't chosen the folder yet, pick **On My iPad → Goldie** first. When Find My opens, tap **Items → Goldie** and leave it there. If iPadOS asks whether Goldie Snap may take a screenshot, tap **OK**; it should only ask once, and while it's asking no screenshots are taken. (Between 11:50 PM and midnight the shortcut stops right away and the midnight run takes over.)")
-                Button(action: start) {
-                    Label("Start Goldie Snap", systemImage: "play.fill")
-                        .frame(maxWidth: .infinity)
+                Text("Tap Start once: every tap runs another copy. If you haven't chosen the folder yet, pick **On My iPad → Goldie** first. When Find My opens, tap **Items → Goldie** and leave it there. If iPadOS asks whether Goldie Snap may take a screenshot, tap **OK**; it should only ask once, and while it's asking no screenshots are taken. (Between 11:50 PM and midnight the shortcut stops right away and the midnight run takes over.)")
+                Group {
+                    if store.folderURL == nil {
+                        // The app can only read the Goldie folder after it's been picked once (an iPadOS
+                        // privacy rule), so it asks for the folder first, then starts.
+                        Button {
+                            startAfterPickingFolder = true
+                            showingFolderPicker = true
+                        } label: {
+                            startLabel
+                        }
+                    } else {
+                        StartSnapButton { startLabel }
+                    }
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
@@ -151,6 +161,7 @@ struct SetupView: View {
                 if startAfterPickingFolder, store.folderURL != nil {
                     Task {
                         try? await Task.sleep(for: .milliseconds(600))  // let the folder picker finish closing first
+                        store.noteSnapStarted()
                         openURL(runGoldieSnapURL)
                     }
                 }
@@ -171,15 +182,9 @@ struct SetupView: View {
         }
     }
 
-    /// Starts the shortcut. The app can only read the Goldie folder after it's been picked once
-    /// (an iPadOS privacy rule), so without one it asks for the folder first, then starts.
-    private func start() {
-        if store.folderURL == nil {
-            startAfterPickingFolder = true
-            showingFolderPicker = true
-        } else {
-            openURL(runGoldieSnapURL)
-        }
+    private var startLabel: some View {
+        Label("Start Goldie Snap", systemImage: "play.fill")
+            .frame(maxWidth: .infinity)
     }
 }
 

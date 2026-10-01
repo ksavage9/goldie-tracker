@@ -81,12 +81,18 @@ so the checklist walks you through these:
   one is finished.
 - **"Goldie Snap wants to take a screenshot":** iPadOS asks this the first time the shortcut
   takes a screenshot. Tap **OK**, not Don't Allow. It should be remembered after that. While the
-  question is on screen, no screenshots are taken, so the status turns red if nobody answers. If
+  question is on screen, no screenshots are taken, so the status turns red if nobody answers.
+  Answer it rather than tapping Restart: the waiting run carries on once you tap OK. If
   it keeps coming back, open Shortcuts → **•••** on Goldie Snap → details (ⓘ) → **Privacy**, tap
   **Reset Privacy**, run the shortcut once and tap **OK**. Editing the shortcut may also make it
   ask again.
 - **iPadOS may sometimes stop a long-running shortcut.** Use the Restart button when that
   happens. The midnight automation starts it fresh every day anyway.
+- **Only one copy of Goldie Snap should run.** Every Start or Restart runs another copy alongside
+  any still going, and two copies take every screenshot twice, seconds apart. So Start and
+  Restart ask first if screenshots are still arriving, or if the last start is still waiting on
+  the screenshot question. If screenshots come in pairs, restart the iPad (that stops every copy)
+  and tap Start once. Each copy also stops itself at 11:50 PM, and the midnight automation starts one.
 - **Storage:** screenshots take roughly 100–200 MB a day. The **Storage** section in the day
   list shows how much Goldie's files use and how much space the iPad has free. Goldie's files are
   kept under a limit you pick in **Setup** (the gear button): 2, 5, 10 or 20 GB, where 5 GB is

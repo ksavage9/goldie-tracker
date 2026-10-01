@@ -11,6 +11,7 @@ final class StoreTests: XCTestCase {
         UserDefaults.standard.removeObject(forKey: "screenshotFolderBookmark")
         UserDefaults.standard.removeObject(forKey: "storageLimitGB")
         UserDefaults.standard.removeObject(forKey: "keepUnbuiltDayIDs")
+        UserDefaults.standard.removeObject(forKey: "goldieSnapStartedAt")
     }
 
     override func tearDown() async throws {
@@ -118,6 +119,28 @@ final class StoreTests: XCTestCase {
             XCTAssertTrue(FileManager.default.fileExists(atPath: url.path), "\(url.lastPathComponent) must never be deleted")
         }
         store.storageLimitGB = StorageGuard.defaultLimitGB
+    }
+
+    /// Every Start runs another copy of Goldie Snap alongside any still going, and two copies take every
+    /// screenshot twice. So Start asks first while screenshots are arriving, or while a start from the app
+    /// hasn't taken its first screenshot yet (it's waiting on the screenshot prompt).
+    func testStartingAgainIsCaughtWhileACopyMayBeRunning() throws {
+        let folder = try Fixtures.makeTemporaryFolder("Goldie-start")
+        try Fixtures.write(Fixtures.screenshot(marker: nil), to: folder.appending(path: "old.jpg"), created: .now - 3600)
+        let store = Store()
+        store.setFolder(folder)
+        XCTAssertFalse(store.isTracking)
+        XCTAssertFalse(store.mayAlreadyBeRunning, "stopped an hour ago: Restart starts it right away")
+
+        store.noteSnapStarted()
+        XCTAssertNotNil(store.startedWithoutScreenshot)
+        XCTAssertTrue(store.mayAlreadyBeRunning, "started, but still waiting on the screenshot prompt")
+
+        try Fixtures.write(Fixtures.screenshot(marker: nil), to: folder.appending(path: "new.jpg"), created: .now + 1)
+        store.refresh()
+        XCTAssertNil(store.startedWithoutScreenshot, "the screenshot it was waiting for came in")
+        XCTAssertTrue(store.isTracking)
+        XCTAssertTrue(store.mayAlreadyBeRunning, "running")
     }
 
     /// A day whose animation was deleted keeps its screenshots, but they must not block cleanup forever:

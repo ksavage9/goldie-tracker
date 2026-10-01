@@ -104,6 +104,7 @@ final class Store: ObservableObject {
     private let bookmarkKey = "screenshotFolderBookmark"
     private let storageLimitKey = "storageLimitGB"
     private let keepUnbuiltKey = "keepUnbuiltDayIDs"
+    private let snapStartedKey = "goldieSnapStartedAt"
     private let animationsFolder = URL.documentsDirectory.appending(path: "Animations")
     private let markerTemplateURL = URL.documentsDirectory.appending(path: "MarkerTemplate.json")
 
@@ -298,6 +299,32 @@ final class Store: ObservableObject {
 
     var lastScreenshotDate: Date? {
         days.lazy.compactMap { $0.screenshots.last?.date }.first
+    }
+
+    /// Screenshots are still arriving: the last one is under 15 minutes old.
+    var isTracking: Bool {
+        guard let lastScreenshotDate else { return false }
+        return lastScreenshotDate > Date.now.addingTimeInterval(-15 * 60)
+    }
+
+    /// Records that the app just started Goldie Snap.
+    func noteSnapStarted() {
+        UserDefaults.standard.set(Date.now, forKey: snapStartedKey)
+    }
+
+    /// When the app last started Goldie Snap, if no screenshot has come in since (in the last day). It's most
+    /// likely waiting for OK on iPadOS's "wants to take a screenshot" prompt, and carries on once that's tapped.
+    var startedWithoutScreenshot: Date? {
+        guard let started = UserDefaults.standard.object(forKey: snapStartedKey) as? Date,
+              started > Date.now.addingTimeInterval(-24 * 3600),
+              (lastScreenshotDate ?? .distantPast) < started else { return nil }
+        return started
+    }
+
+    /// Starting Goldie Snap now would run a second copy alongside one that's still going, and two copies
+    /// take every screenshot twice.
+    var mayAlreadyBeRunning: Bool {
+        isTracking || startedWithoutScreenshot != nil
     }
 
     func videoURL(for day: Day) -> URL {

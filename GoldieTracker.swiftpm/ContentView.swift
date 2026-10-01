@@ -90,7 +90,7 @@ struct DayList: View {
     var body: some View {
         List(selection: $selectedDayID) {
             Section {
-                TrackingStatusRow(lastScreenshot: store.lastScreenshotDate)
+                TrackingStatusRow()
             }
 
             Section {
@@ -124,12 +124,9 @@ struct DayList: View {
 }
 
 struct TrackingStatusRow: View {
-    let lastScreenshot: Date?  // nil when no screenshots are left, e.g. tracking stopped days ago
+    @EnvironmentObject private var store: Store
 
-    private var isTracking: Bool {
-        guard let lastScreenshot else { return false }
-        return lastScreenshot > Date.now.addingTimeInterval(-15 * 60)
-    }
+    private var isTracking: Bool { store.isTracking }
 
     var body: some View {
         // Stacked rather than side by side: the sidebar is too narrow for the title, text and button in one row.
@@ -148,7 +145,7 @@ struct TrackingStatusRow: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                     Group {
-                        if let lastScreenshot {
+                        if let lastScreenshot = store.lastScreenshotDate {
                             Text("Last screenshot \(lastScreenshot, style: .relative) ago")
                         } else {
                             Text("No screenshots saved")
@@ -158,13 +155,56 @@ struct TrackingStatusRow: View {
                     .foregroundStyle(.secondary)
                 }
                 if !isTracking {
-                    Link("Restart", destination: runGoldieSnapURL)
+                    StartSnapButton { Text("Restart") }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
                 }
             }
         }
         .padding(.vertical, 2)
+    }
+}
+
+/// Starts Goldie Snap, but asks first if a copy may already be running. Every start runs another copy
+/// alongside any that's still going, and two copies take every screenshot twice, seconds apart.
+struct StartSnapButton<Label: View>: View {
+    @EnvironmentObject private var store: Store
+    @Environment(\.openURL) private var openURL
+    @State private var confirming = false
+    let label: Label
+
+    init(@ViewBuilder label: () -> Label) {
+        self.label = label()
+    }
+
+    var body: some View {
+        Button {
+            if store.mayAlreadyBeRunning {
+                confirming = true
+            } else {
+                start()
+            }
+        } label: {
+            label
+        }
+        .confirmationDialog("Goldie Snap May Already Be Running", isPresented: $confirming, titleVisibility: .visible) {
+            Button("Start Another Copy", role: .destructive, action: start)
+        } message: {
+            Text(message)
+        }
+    }
+
+    private var message: String {
+        let twice = "Starting it again runs a second copy, and every screenshot is then taken twice."
+        if !store.isTracking, let started = store.startedWithoutScreenshot {
+            return "It was started at \(started.timeText) and hasn't taken a screenshot yet, so it's probably waiting for OK on the \"wants to take a screenshot\" prompt. Go to Find My and tap OK there instead. \(twice)"
+        }
+        return "A screenshot came in during the last 15 minutes, so it's running. \(twice)"
+    }
+
+    private func start() {
+        store.noteSnapStarted()
+        openURL(runGoldieSnapURL)
     }
 }
 
