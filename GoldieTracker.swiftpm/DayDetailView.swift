@@ -68,7 +68,7 @@ struct DayDetailView: View {
             if day.screenshots.isEmpty {
                 Text("Its screenshots were already removed to save space, so it can't be rebuilt, and the day will disappear from the list.")
             } else {
-                Text("The screenshots stay, so you can rebuild it anytime with Build Now. It won't be rebuilt automatically.")
+                Text("The screenshots stay, so you can rebuild it anytime with Build Now. It won't be rebuilt automatically. If storage runs out, these screenshots can be removed after the others.")
             }
         }
         .fullScreenCover(isPresented: $showingHeatmap) {

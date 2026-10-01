@@ -95,6 +95,58 @@ final class StoreTests: XCTestCase {
         store.storageLimitGB = StorageGuard.defaultLimitGB
     }
 
+    /// If the wrong folder is picked, its other files must never count as screenshots, so cleanup can never delete them.
+    func testOtherFilesInTheFolderAreNeverTouched() async throws {
+        let calendar = Calendar.current
+        let yesterdayStart = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: .now))!
+        let folder = try Fixtures.makeTemporaryFolder("Goldie-wrong-folder")
+        for i in 0..<3 {
+            try Fixtures.write(Fixtures.screenshot(marker: nil), to: folder.appending(path: "\(i).jpg"), created: yesterdayStart + 3600 + Double(i) * 300)
+        }
+        let others = ["Taxes 2026.pdf", "notes.txt", "vacation.mov"].map { folder.appending(path: $0) }
+        for (i, url) in others.enumerated() {
+            try Data("someone's document".utf8).write(to: url)
+            try FileManager.default.setAttributes([.creationDate: yesterdayStart + 3600 + Double(i)], ofItemAtPath: url.path)
+        }
+        let store = Store()
+        store.setFolder(folder)
+        XCTAssertEqual(store.days.first?.screenshots.count, 3, "only the images count as screenshots")
+
+        await store.buildMissingAnimations()
+        store.storageLimitGB = 0  // forces cleanup to remove everything it's allowed to
+        for url in others {
+            XCTAssertTrue(FileManager.default.fileExists(atPath: url.path), "\(url.lastPathComponent) must never be deleted")
+        }
+        store.storageLimitGB = StorageGuard.defaultLimitGB
+    }
+
+    /// A day whose animation was deleted keeps its screenshots, but they must not block cleanup forever:
+    /// they can go once every finished day's screenshots have.
+    func testScreenshotsOfADeletedAnimationCanBeCleanedUpLast() async throws {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: .now)
+        let folder = try Fixtures.makeTemporaryFolder("Goldie-kept-unbuilt")
+        var shots: [Int: [URL]] = [:]
+        for daysAgo in [1, 2] {
+            let dayStart = calendar.date(byAdding: .day, value: -daysAgo, to: today)!
+            for i in 0..<3 {
+                let url = folder.appending(path: "\(daysAgo)-\(i).jpg")
+                try Fixtures.write(Fixtures.screenshot(marker: nil), to: url, created: dayStart + 3600 + Double(i) * 300)
+                shots[daysAgo, default: []].append(url)
+            }
+        }
+        let store = Store()
+        store.setFolder(folder)
+        await store.buildMissingAnimations()
+        let yesterday = try XCTUnwrap(store.days.first { calendar.isDateInYesterday($0.date) })
+        store.deleteAnimation(for: yesterday)  // its screenshots are kept, and it isn't rebuilt
+
+        store.storageLimitGB = 0
+        XCTAssertTrue(shots[2]!.allSatisfy { !FileManager.default.fileExists(atPath: $0.path) }, "the finished day's screenshots go")
+        XCTAssertTrue(shots[1]!.allSatisfy { !FileManager.default.fileExists(atPath: $0.path) }, "and then the kept day's, instead of filling the iPad forever")
+        store.storageLimitGB = StorageGuard.defaultLimitGB
+    }
+
     func testFolderDeletedWhileRunningGoesBackToSetup() throws {
         let folder = try Fixtures.makeTemporaryFolder("Goldie-deleted")
         try Fixtures.write(Fixtures.screenshot(marker: nil), to: folder.appending(path: "a.jpg"), created: .now)

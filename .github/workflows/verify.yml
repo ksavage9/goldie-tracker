@@ -43,7 +43,7 @@ jobs:
             -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" \
             -derivedDataPath "${{ runner.temp }}/tests" -resultBundlePath "${{ runner.temp }}/Tests.xcresult" \
             CODE_SIGNING_ALLOWED=NO 2>&1 | tee "${{ runner.temp }}/test.log" \
-            | grep -E "Test Case .* (passed|failed)|error:|Executed|TEST (SUCCEEDED|FAILED)|FREE SPACE"
+            | grep -E "Test Case .* (passed|failed)|error:|Executed|TEST (SUCCEEDED|FAILED)|FREE SPACE|PERF "
 
       - name: Launch the real app
         run: bash ci/smoke.sh "${{ steps.sim.outputs.udid }}" "${{ runner.temp }}/app/Build/Products" "${{ runner.temp }}"

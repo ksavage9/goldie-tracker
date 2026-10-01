@@ -102,16 +102,21 @@ enum HeatmapBuilder {
         template: MarkerTemplate,
         onProgress: @MainActor (Double) -> Void
     ) async throws -> Heatmap {
-        guard let base = lastReadableImage(in: screenshots) else {
+        guard let (baseScreenshot, base) = lastReadable(in: screenshots) else {
             throw BuildError("No readable screenshots for this day.")
         }
         let height = gridHeight(for: base)
-        guard let baseGrid = grid(for: base, height: height) else {
+        let coarseWidth = gridWidth / alignmentScale, coarseHeight = height / alignmentScale
+        // Every screenshot, the background included, is decoded straight at grid size, the same way, so their
+        // grids compare fairly; that's also much faster than decoding the full screenshot.
+        let maxPixelSize = max(gridWidth, height)
+        guard let baseImage = ImageFile.downsampled(baseScreenshot.url, maxPixelSize: maxPixelSize),
+              let coarseBase = grid(from: baseImage, width: coarseWidth, height: coarseHeight) else {
             throw BuildError("Couldn't read the day's screenshots.")
         }
         // The heat is drawn over the day's last screenshot. Each screenshot is lined up with it first, so a
         // sighting lands on the right part of the map even if the map moved a little.
-        let alignmentPatch = makeAlignmentPatch(from: coarse(baseGrid))
+        let alignmentPatch = makeAlignmentPatch(from: coarseBase)
         let r = template.radius
 
         // Pass 1: in each screenshot that lines up, the best match for her marker (a candidate), whether the
@@ -131,10 +136,12 @@ enum HeatmapBuilder {
             try Task.checkCancellation()  // stop if the heat map screen was closed
             await onProgress(Double(index) / Double(screenshots.count))
             let loaded = autoreleasepool { () -> (grid: Grid, shift: GridPoint?)? in
-                guard let image = UIImage(contentsOfFile: screenshot.url.path),
-                      let grid = grid(for: image, height: height) else { return nil }
+                // Self.grid: a plain `grid(...)` after `let grid` would mean the local value, not the function.
+                guard let image = ImageFile.downsampled(screenshot.url, maxPixelSize: maxPixelSize),
+                      let grid = Self.grid(from: image, width: gridWidth, height: height),
+                      let coarseGrid = Self.grid(from: image, width: coarseWidth, height: coarseHeight) else { return nil }
                 // A plain background can't be lined up, so screenshots are then taken as they are.
-                let shift = alignmentPatch.map { align(coarse(grid), with: $0) } ?? GridPoint(x: 0, y: 0)
+                let shift = alignmentPatch.map { align(coarseGrid, with: $0) } ?? GridPoint(x: 0, y: 0)
                 return (grid, shift)
             }
             guard let loaded else { continue }  // unreadable file
@@ -227,7 +234,16 @@ enum HeatmapBuilder {
 
     /// The day's latest screenshot that opens. It's the heat map's background and the image the marker is picked on.
     static func lastReadableImage(in screenshots: [Screenshot]) -> UIImage? {
-        screenshots.reversed().lazy.compactMap { UIImage(contentsOfFile: $0.url.path) }.first
+        lastReadable(in: screenshots)?.image
+    }
+
+    private static func lastReadable(in screenshots: [Screenshot]) -> (screenshot: Screenshot, image: UIImage)? {
+        for screenshot in screenshots.reversed() {
+            if let image = UIImage(contentsOfFile: screenshot.url.path) {
+                return (screenshot, image)
+            }
+        }
+        return nil
     }
 
     private static func color(at t: Float) -> (red: Float, green: Float, blue: Float, alpha: Float) {
@@ -265,25 +281,30 @@ enum HeatmapBuilder {
     }
 
     private static func grid(for image: UIImage, height: Int) -> Grid? {
-        guard let cgImage = image.cgImage else { return nil }
-        var bytes = [UInt8](repeating: 0, count: gridWidth * height)
+        image.cgImage.flatMap { grid(from: $0, width: gridWidth, height: height) }
+    }
+
+    /// The image drawn in grayscale at the given size. Drawing smaller averages the detail away, which is how
+    /// the shrunken alignment grid is made.
+    private static func grid(from image: CGImage, width: Int, height: Int) -> Grid? {
+        var bytes = [UInt8](repeating: 0, count: width * height)
         let drawn = bytes.withUnsafeMutableBytes { buffer -> Bool in
             guard let context = CGContext(
                 data: buffer.baseAddress,
-                width: gridWidth,
+                width: width,
                 height: height,
                 bitsPerComponent: 8,
-                bytesPerRow: gridWidth,
+                bytesPerRow: width,
                 space: CGColorSpaceCreateDeviceGray(),
                 bitmapInfo: CGImageAlphaInfo.none.rawValue
             ) else { return false }
             context.interpolationQuality = .medium
-            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: gridWidth, height: height))
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
             return true
         }
         guard drawn else { return nil }
         let values = vDSP.multiply(1 / 255, vDSP.integerToFloatingPoint(bytes, floatingPointType: Float.self))
-        return Grid(width: gridWidth, height: height, values: values)
+        return Grid(width: width, height: height, values: values)
     }
 
     /// How well the marker's pattern matches the screen at every position, from -1 to 1 (normalized
@@ -354,25 +375,6 @@ enum HeatmapBuilder {
         let y: Int
         let width: Int
         let height: Int
-    }
-
-    /// The grid shrunk by `alignmentScale`, averaging each block.
-    private static func coarse(_ grid: Grid) -> Grid {
-        let s = alignmentScale
-        let width = grid.width / s, height = grid.height / s
-        var values = [Float](repeating: 0, count: width * height)
-        for y in 0..<height {
-            for x in 0..<width {
-                var total: Float = 0
-                for dy in 0..<s {
-                    for dx in 0..<s {
-                        total += grid[x * s + dx, y * s + dy]
-                    }
-                }
-                values[y * width + x] = total / Float(s * s)
-            }
-        }
-        return Grid(width: width, height: height, values: values)
     }
 
     /// The middle-right of the screen, where Find My shows the map: clear of the sidebar on the left and

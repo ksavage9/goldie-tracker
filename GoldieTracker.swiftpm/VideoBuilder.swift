@@ -91,24 +91,18 @@ enum VideoBuilder {
     }
 
     private static func makeFrame(_ screenshot: Screenshot, size: CGSize, showsDate: Bool, pool: CVPixelBufferPool?) -> CVPixelBuffer? {
-        guard let pool, let image = UIImage(contentsOfFile: screenshot.url.path) else { return nil }
-
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        let rendered = UIGraphicsImageRenderer(size: size, format: format).image { _ in
-            UIColor.black.setFill()
-            UIRectFill(CGRect(origin: .zero, size: size))
-            image.draw(in: AVMakeRect(aspectRatio: image.size, insideRect: CGRect(origin: .zero, size: size)))
-            drawTimestamp(screenshot.date, showsDate: showsDate, in: size)
+        // Decoded straight at the video's size, which is much faster than decoding the full screenshot.
+        guard let pool, let image = ImageFile.downsampled(screenshot.url, maxPixelSize: Int(max(size.width, size.height))) else {
+            return nil
         }
-        guard let cgImage = rendered.cgImage else { return nil }
-
         var buffer: CVPixelBuffer?
         CVPixelBufferPoolCreatePixelBuffer(nil, pool, &buffer)
         guard let buffer else { return nil }
 
+        // Drawn straight into the video frame, with no in-between image.
         CVPixelBufferLockBaseAddress(buffer, [])
-        let context = CGContext(
+        defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
+        guard let context = CGContext(
             data: CVPixelBufferGetBaseAddress(buffer),
             width: Int(size.width),
             height: Int(size.height),
@@ -116,9 +110,17 @@ enum VideoBuilder {
             bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
             space: CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
-        )
-        context?.draw(cgImage, in: CGRect(origin: .zero, size: size))
-        CVPixelBufferUnlockBaseAddress(buffer, [])
+        ) else { return nil }
+        let frame = CGRect(origin: .zero, size: size)
+        context.setFillColor(UIColor.black.cgColor)
+        context.fill(frame)
+        context.draw(image, in: AVMakeRect(aspectRatio: CGSize(width: image.width, height: image.height), insideRect: frame))
+        // The time stamp is drawn the UIKit way, top-down, so flip the context first.
+        context.translateBy(x: 0, y: size.height)
+        context.scaleBy(x: 1, y: -1)
+        UIGraphicsPushContext(context)
+        drawTimestamp(screenshot.date, showsDate: showsDate, in: size)
+        UIGraphicsPopContext()
         return buffer
     }
 

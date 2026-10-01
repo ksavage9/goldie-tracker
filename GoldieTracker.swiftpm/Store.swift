@@ -1,10 +1,30 @@
+import ImageIO
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct BuildError: LocalizedError {
     let errorDescription: String?
 
     init(_ message: String) {
         errorDescription = message
+    }
+}
+
+enum ImageFile {
+    /// Decodes an image already shrunk so its longest side is at most `maxPixelSize`. JPEG decoders can skip the
+    /// detail they don't need, so this is several times faster, and far lighter, than decoding a 2732 × 2048
+    /// screenshot at full size and shrinking it afterwards.
+    static func downsampled(_ url: URL, maxPixelSize: Int) -> CGImage? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else {
+            return nil
+        }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
     }
 }
 
@@ -87,13 +107,6 @@ final class Store: ObservableObject {
     private let animationsFolder = URL.documentsDirectory.appending(path: "Animations")
     private let markerTemplateURL = URL.documentsDirectory.appending(path: "MarkerTemplate.json")
 
-    private static let dayFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
-
     init() {
         if let data = try? Data(contentsOf: markerTemplateURL) {
             markerTemplate = try? JSONDecoder().decode(MarkerTemplate.self, from: data)
@@ -164,7 +177,17 @@ final class Store: ObservableObject {
             return
         }
 
+        // Only images count. Anything else in the folder (if the wrong folder was picked) is never listed,
+        // so storage cleanup can never delete it.
+        var isImageType: [String: Bool] = [:]  // looked up once per file extension, not once per file
         let screenshots = files.compactMap { url -> Screenshot? in
+            let fileExtension = url.pathExtension.lowercased()
+            let isImage = isImageType[fileExtension] ?? {
+                let isImage = UTType(filenameExtension: fileExtension)?.conforms(to: .image) == true
+                isImageType[fileExtension] = isImage
+                return isImage
+            }()
+            guard isImage else { return nil }
             let values = try? url.resourceValues(forKeys: keys)
             guard values?.isRegularFile == true, let date = values?.creationDate else { return nil }
             return Screenshot(url: url, date: date, bytes: Int64(values?.fileSize ?? 0))
@@ -200,12 +223,17 @@ final class Store: ObservableObject {
         availableSpace = StorageGuard.availableBytes()
     }
 
+    /// "2026-09-29", from the same calendar (and time zone) the days are grouped by, so the two always agree,
+    /// even if the iPad changes time zone while the app is open.
     func dayID(for date: Date) -> String {
-        Self.dayFormatter.string(from: date)
+        let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 
     func date(forDayID id: String) -> Date? {
-        Self.dayFormatter.date(from: id)
+        let parts = id.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        return Calendar.current.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
     }
 
     /// Every screenshot taken between two moments (inclusive), oldest first, across days.
@@ -343,6 +371,13 @@ final class Store: ObservableObject {
         let screenshotBatches = finishedOldestFirst.filter { !$0.screenshots.isEmpty }.map { day in
             StorageGuard.Batch(urls: day.screenshots.map(\.url), bytes: day.screenshots.reduce(0) { $0 + $1.bytes })
         }
+        // Days whose animation was deleted keep their screenshots, but they mustn't fill the iPad forever.
+        let keptUnbuiltOldestFirst = days.reversed().filter { day in
+            day.date < today && keepUnbuiltDayIDs.contains(day.id) && !day.screenshots.isEmpty && !isBuilding(day)
+        }
+        let keptUnbuiltBatches = keptUnbuiltOldestFirst.map { day in
+            StorageGuard.Batch(urls: day.screenshots.map(\.url), bytes: day.screenshots.reduce(0) { $0 + $1.bytes })
+        }
         let animationBatches = finishedOldestFirst.map { day in
             StorageGuard.Batch(urls: [videoURL(for: day)], bytes: videoBytes[day.id] ?? 0)
         }
@@ -353,7 +388,7 @@ final class Store: ObservableObject {
             limit: Int64(storageLimitGB) * 1_000_000_000,
             available: availableSpace
         )
-        let batches = StorageGuard.pick(screenshotBatches + animationBatches, toFree: bytesToFree)
+        let batches = StorageGuard.pick(screenshotBatches + keptUnbuiltBatches + animationBatches, toFree: bytesToFree)
         guard !batches.isEmpty else { return }
         for url in batches.flatMap(\.urls) {
             try? FileManager.default.removeItem(at: url)  // already gone is fine
