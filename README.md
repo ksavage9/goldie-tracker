@@ -60,9 +60,9 @@ so the checklist walks you through these:
   The first time, tap the center of her marker on the map once, so the app knows what to look
   for; it then finds her in every screenshot on its own. Each screenshot is lined up with the
   day's last one, so small moves of the map are fine; zoomed screenshots are skipped, and the heat
-  map says how many. A sighting in a new place only counts if something changed there since the
-  screenshot before, so icons and labels that look like her marker are ignored. Use **Pick
-  Marker Again** if results look off.
+  map says how many. Each stay at one spot counts only if she arrived there or left it (the
+  screen changed), so icons and labels that look like her marker but never move are ignored.
+  Use **Pick Marker Again** if results look off.
 - **Daily animations:** whenever the app is open, it builds an animation for each finished day
   that doesn't have one yet. It also rebuilds one that's out of date, for example if you tapped
   Build Now in the afternoon.
