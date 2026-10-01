@@ -90,7 +90,7 @@ enum VideoBuilder {
         return CGSize(width: width, height: height)
     }
 
-    private static func makeFrame(_ screenshot: Screenshot, size: CGSize, showsDate: Bool, pool: CVPixelBufferPool?) -> CVPixelBuffer? {
+    static func makeFrame(_ screenshot: Screenshot, size: CGSize, showsDate: Bool, pool: CVPixelBufferPool?) -> CVPixelBuffer? {
         // Decoded straight at the video's size, which is much faster than decoding the full screenshot.
         guard let pool, let image = ImageFile.downsampled(screenshot.url, maxPixelSize: Int(max(size.width, size.height))) else {
             return nil

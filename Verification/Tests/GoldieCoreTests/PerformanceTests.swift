@@ -1,3 +1,4 @@
+import AVFoundation
 import XCTest
 @testable import GoldieCore
 
@@ -55,7 +56,8 @@ final class PerformanceTests: XCTestCase {
         UserDefaults.standard.removeObject(forKey: "screenshotFolderBookmark")
     }
 
-    /// Breaks the animation's cost down: decoding a screenshot vs. the whole build, for 1366- and 2732-wide sources.
+    /// Breaks the animation's cost down: decoding, drawing a frame, starting the encoder, and the whole build
+    /// for 1366- and 2732-wide sources.
     func testAnimationCostBreakdown() async throws {
         let small = try (0..<12).map { i in
             try Fixtures.write(Fixtures.screenshot(marker: CGPoint(x: 600, y: 300)), to: Fixtures.makeTemporaryFolder("perf-small-\(i)").appending(path: "s.jpg"), created: Date(timeIntervalSince1970: 1_790_000_000 + Double(i) * 300))
@@ -65,6 +67,21 @@ final class PerformanceTests: XCTestCase {
         var start = Date()
         for shot in large { _ = ImageFile.downsampled(shot.url, maxPixelSize: 1280) }
         print("PERF decode one 2732-wide screenshot at 1280: \(Int(Date().timeIntervalSince(start) / 12 * 1000)) ms")
+
+        let output = FileManager.default.temporaryDirectory.appending(path: "perf-\(UUID().uuidString).mp4")
+        start = Date()
+        try await VideoBuilder.makeVideo(from: [small[0]], to: output) { _ in }
+        print("PERF first one-frame animation (encoder start-up): \(Int(Date().timeIntervalSince(start) * 1000)) ms")
+
+        var pool: CVPixelBufferPool?
+        CVPixelBufferPoolCreate(nil, nil, [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+            kCVPixelBufferWidthKey as String: 1280,
+            kCVPixelBufferHeightKey as String: 958,
+        ] as CFDictionary, &pool)
+        start = Date()
+        for shot in large { _ = VideoBuilder.makeFrame(shot, size: CGSize(width: 1280, height: 958), showsDate: false, pool: pool) }
+        print("PERF draw one frame from a 2732-wide screenshot: \(Int(Date().timeIntervalSince(start) / 12 * 1000)) ms")
 
         for (label, shots) in [("1366-wide", small), ("2732-wide", large)] {
             let output = FileManager.default.temporaryDirectory.appending(path: "perf-\(UUID().uuidString).mp4")
@@ -76,6 +93,9 @@ final class PerformanceTests: XCTestCase {
 
     func testAnimationSpeed() async throws {
         let shots = try fullSizeDay("perf-video", count: 24)
+        // The simulator's software encoder takes a long time to start the first time; that isn't per-frame cost.
+        let warmUp = FileManager.default.temporaryDirectory.appending(path: "perf-\(UUID().uuidString).mp4")
+        try await VideoBuilder.makeVideo(from: [shots[0]], to: warmUp) { _ in }
         let output = FileManager.default.temporaryDirectory.appending(path: "perf-\(UUID().uuidString).mp4")
         let start = Date()
         try await VideoBuilder.makeVideo(from: shots, to: output) { _ in }
