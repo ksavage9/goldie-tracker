@@ -227,10 +227,15 @@ struct HeatmapResultView: View {
                     StatTile(title: "Busiest Spot", value: duration(minutes: heatmap.busiestSpotMinutes), systemImage: "flame.fill")
                 }
 
-                Text("The heat shows where Goldie's marker appeared on the Find My map. For accurate results, don't pan or zoom the map during the day.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                Group {
+                    if heatmap.skipped > 0 {
+                        Text("Skipped \(heatmap.skipped) screenshots where the map was zoomed or had moved too far to line up with this one.")
+                    }
+                    Text("The heat shows where Goldie's marker appeared on the Find My map. Small moves of the map are lined up automatically, and a sighting only counts in a new place if something changed there since the screenshot before.")
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding()
         }

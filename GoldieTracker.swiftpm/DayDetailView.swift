@@ -9,7 +9,8 @@ struct DayDetailView: View {
     @State private var confirmingDelete = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        // Just the date and the video: no large title, so the video gets as much of the screen as possible.
+        VStack(alignment: .leading, spacing: 8) {
             Text(day.fullDate)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -17,9 +18,9 @@ struct DayDetailView: View {
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .padding()
+        .padding([.horizontal, .bottom])
         .background(Color(.systemGroupedBackground))
-        .navigationTitle(day.title)
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             Button {
                 showingHeatmap = true
@@ -157,67 +158,31 @@ struct BuildProgressView: View {
     }
 }
 
+/// The video with its own control bar underneath: play/pause, frame steps, a scrubber and a speed menu.
+/// Nothing is drawn over the picture, so the map is never covered.
 struct PlayerView: View {
     let url: URL
     @State private var player: AVPlayer?  // created once in onAppear, not on every redraw
+    @State private var scrubTime: Double?  // where the scrubber is while it's being dragged
     @AppStorage("playbackSpeed") private var speed = 1.0  // remembered across days and launches
+    private let speeds: [Double] = [0.25, 0.5, 1, 2, 4]
 
     var body: some View {
         VStack(spacing: 0) {
-            VideoPlayer(player: player)
-                .background(.black)
-
-            HStack(spacing: 12) {
-                // One frame is one screenshot, 5 minutes apart.
-                Button {
-                    step(by: -1)
-                } label: {
-                    Image(systemName: "backward.frame.fill")
-                }
-                .accessibilityLabel("Previous frame")
-                Button {
-                    step(by: 1)
-                } label: {
-                    Image(systemName: "forward.frame.fill")
-                }
-                .accessibilityLabel("Next frame")
-                Divider()
-                    .frame(height: 22)
-                Image(systemName: "tortoise.fill")
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-                Slider(value: $speed, in: 0.25...4, step: 0.25) {
-                    Text("Playback Speed")
-                }
-                .accessibilityValue(String(format: "%.2f times", speed))
-                Image(systemName: "hare.fill")
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-                Button {
-                    speed = 1  // tap the speed to reset to normal
-                } label: {
-                    Text(String(format: "%.2f×", speed))
-                        .font(.callout.weight(.semibold))
-                        .monospacedDigit()
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(.tint.opacity(0.15), in: Capsule())
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.tint)
-                .accessibilityLabel("Playback speed \(String(format: "%.2f", speed)) times")
-                .accessibilityHint("Resets to normal speed")
+            PlayerSurface(player: player)
+            // Redrawn 10 times a second, so the play button and scrubber follow the video.
+            TimelineView(.periodic(from: .now, by: 0.1)) { _ in
+                controls
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.vertical, 10)
             .background(Color(.secondarySystemGroupedBackground))
         }
         .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
         .onAppear {
             guard player == nil else { return }  // coming back (e.g. from the heat map) keeps its place
             let player = AVPlayer(url: url)
-            // defaultRate is the speed the player's own play button uses.
+            // defaultRate is the speed play() uses.
             player.defaultRate = Float(speed)
             player.play()
             self.player = player
@@ -232,14 +197,100 @@ struct PlayerView: View {
         .onDisappear { player?.pause() }
     }
 
+    private var duration: Double {
+        guard let duration = player?.currentItem?.duration, duration.isNumeric else { return 0 }
+        return duration.seconds
+    }
+
+    private var isPlaying: Bool {
+        player?.timeControlStatus == .playing
+    }
+
+    private var controls: some View {
+        HStack(spacing: 16) {
+            Button(action: togglePlay) {
+                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                    .frame(width: 22)
+            }
+            .accessibilityLabel(isPlaying ? "Pause" : "Play")
+
+            // One frame is one screenshot, 5 minutes apart.
+            Button {
+                step(by: -1)
+            } label: {
+                Image(systemName: "backward.frame.fill")
+            }
+            .accessibilityLabel("Previous frame")
+            Button {
+                step(by: 1)
+            } label: {
+                Image(systemName: "forward.frame.fill")
+            }
+            .accessibilityLabel("Next frame")
+
+            Slider(
+                value: Binding(
+                    get: { scrubTime ?? player?.currentTime().seconds ?? 0 },
+                    set: { time in
+                        scrubTime = time
+                        seek(to: time)
+                    }
+                ),
+                in: 0...max(duration, 0.01),
+                onEditingChanged: { editing in
+                    if !editing {
+                        scrubTime = nil
+                    }
+                }
+            )
+            .accessibilityLabel("Position")
+
+            Menu {
+                Picker("Speed", selection: $speed) {
+                    ForEach(speeds, id: \.self) { speed in
+                        Text(label(for: speed)).tag(speed)
+                    }
+                }
+            } label: {
+                Text(label(for: speed))
+                    .font(.callout.weight(.semibold))
+                    .monospacedDigit()
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color.accentColor.opacity(0.15), in: Capsule())
+            }
+            .accessibilityLabel("Playback speed \(label(for: speed))")
+        }
+    }
+
+    private func label(for speed: Double) -> String {
+        String(format: "%g×", speed)
+    }
+
+    private func togglePlay() {
+        guard let player else { return }
+        if isPlaying {
+            player.pause()
+        } else {
+            if player.currentTime().seconds >= duration - 0.05 {
+                player.seek(to: .zero)  // at the end: play again from the start
+            }
+            player.play()
+        }
+    }
+
+    private func seek(to seconds: Double) {
+        player?.seek(to: CMTime(seconds: seconds, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+    }
+
     /// Pauses and moves exactly one frame back or forward. It seeks to the frame's own time rather than using
     /// AVPlayerItem.step, which counts from the video's end time: one frame past the last screenshot, so the
     /// first step back from the end landed on the frame already showing.
     private func step(by frames: Int) {
-        guard let player, let duration = player.currentItem?.duration, duration.isNumeric else { return }
+        guard let player, duration > 0 else { return }
         player.pause()
         let fps = Double(VideoBuilder.framesPerSecond)
-        let lastFrame = max(0, Int((duration.seconds * fps).rounded()) - 1)
+        let lastFrame = max(0, Int((duration * fps).rounded()) - 1)
         let current = min(Int((player.currentTime().seconds * fps + 0.001).rounded(.down)), lastFrame)
         let target = min(max(current + frames, 0), lastFrame)
         player.seek(
@@ -247,5 +298,33 @@ struct PlayerView: View {
             toleranceBefore: .zero,
             toleranceAfter: .zero
         )
+    }
+}
+
+/// Just the video picture, letterboxed in black, with no controls drawn over it.
+private struct PlayerSurface: UIViewRepresentable {
+    let player: AVPlayer?
+
+    func makeUIView(context: Context) -> PlayerLayerView {
+        PlayerLayerView()
+    }
+
+    func updateUIView(_ view: PlayerLayerView, context: Context) {
+        view.playerLayer.player = player
+    }
+
+    final class PlayerLayerView: UIView {
+        override class var layerClass: AnyClass { AVPlayerLayer.self }
+        var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            backgroundColor = .black
+            playerLayer.videoGravity = .resizeAspect
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("PlayerLayerView is only created in code")
+        }
     }
 }

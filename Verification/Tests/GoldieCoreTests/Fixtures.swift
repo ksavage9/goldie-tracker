@@ -7,7 +7,16 @@ enum Fixtures {
     static let size = CGSize(width: 1366, height: 1024)  // iPad's 4:3 shape, smaller so tests run fast
     static let sidebarIcon = CGPoint(x: 50, y: 120)
 
-    static func screenshot(marker: CGPoint?, face: UIColor = .orange, size: CGSize = size) -> UIImage {
+    /// `marker` and `lookalike` are map positions; `mapOffset` moves the whole map (and them) on screen, the way
+    /// Find My re-centers. `zoomedOut` draws a different, zoomed-out map.
+    static func screenshot(
+        marker: CGPoint?,
+        face: UIColor = .orange,
+        mapOffset: CGPoint = .zero,
+        lookalike: CGPoint? = nil,
+        zoomedOut: Bool = false,
+        size: CGSize = size
+    ) -> UIImage {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         return UIGraphicsImageRenderer(size: size, format: format).image { context in
@@ -15,19 +24,27 @@ enum Fixtures {
             UIColor(white: 0.92, alpha: 1).setFill()
             context.fill(CGRect(origin: .zero, size: size))
             UIColor.white.setFill()
-            for x in stride(from: 380.0, to: size.width, by: 140) {
+            let spacing: (x: CGFloat, y: CGFloat) = zoomedOut ? (36, 36) : (140, 120)
+            for x in stride(from: 380 + mapOffset.x - spacing.x * 12, to: size.width, by: spacing.x) where x > 350 {
                 context.fill(CGRect(x: x, y: 0, width: 10, height: size.height))
             }
-            for y in stride(from: 60.0, to: size.height, by: 120) {
+            for y in stride(from: 60 + mapOffset.y - spacing.y * 12, to: size.height, by: spacing.y) {
                 context.fill(CGRect(x: 360, y: y, width: size.width - 360, height: 10))
             }
-            UIColor(red: 0.75, green: 0.88, blue: 0.70, alpha: 1).setFill()
-            context.fill(CGRect(x: 700, y: 400, width: 250, height: 200))
+            if !zoomedOut {
+                UIColor(red: 0.75, green: 0.88, blue: 0.70, alpha: 1).setFill()
+                context.fill(CGRect(x: 700 + mapOffset.x, y: 400 + mapOffset.y, width: 250, height: 200))
+                UIColor(red: 0.55, green: 0.75, blue: 0.95, alpha: 1).setFill()  // a lake
+                cg.fillEllipse(in: CGRect(x: 820 + mapOffset.x, y: 150 + mapOffset.y, width: 180, height: 120))
+            }
             UIColor(white: 0.97, alpha: 1).setFill()
             context.fill(CGRect(x: 0, y: 0, width: 360, height: size.height))
             drawMarker(at: sidebarIcon, face: face, in: cg)
             if let marker {
-                drawMarker(at: marker, face: face, in: cg)
+                drawMarker(at: CGPoint(x: marker.x + mapOffset.x, y: marker.y + mapOffset.y), face: face, in: cg)
+            }
+            if let lookalike {
+                drawMarker(at: CGPoint(x: lookalike.x + mapOffset.x, y: lookalike.y + mapOffset.y), face: .systemTeal, in: cg)
             }
         }
     }

@@ -50,16 +50,17 @@ so the checklist walks you through these:
   you pick, with a **From** and **To** date and time. The range can cross days (for example,
   Tuesday 6 PM to Wednesday 8 AM). When it does, each frame shows the date as well as the time.
   This animation is only kept while you watch it, so it doesn't use up storage.
-- **Speed slider:** under the video, drag from 0.25× (slow, to study each spot) to 4× (a whole
-  day in about 15 seconds). The app remembers your setting.
-- **Frame by frame:** the ◀︎ and ▶︎ frame buttons under the video pause it and step back or
-  forward one screenshot (5 minutes) at a time. The time of each screenshot is shown in the
-  bottom-right corner of the frame.
+- **Under the video:** play/pause, the ◀︎ and ▶︎ frame buttons (one screenshot, 5 minutes, per
+  tap), the scrubber, and the speed menu (0.25× to 4×; the app remembers your choice). Nothing is
+  drawn over the video, and the time of each screenshot is in the bottom-right corner of the frame.
 - **Heat Map:** on any day, tap **Heat Map** to see where Goldie spent her time. The glow runs
   from blue (passing through) to red (most time), and her busiest spot gets a pulsing marker.
-  The first time, you tap the center of her marker on the map once, so the app knows what to
-  look for. It then finds her in every screenshot on its own. Use **Pick Marker Again** if
-  results look off. For accurate results, don't pan or zoom the Find My map during the day.
+  The first time, tap the center of her marker on the map once, so the app knows what to look
+  for; it then finds her in every screenshot on its own. Each screenshot is lined up with the
+  day's last one, so small moves of the map are fine; zoomed screenshots are skipped, and the heat
+  map says how many. A sighting in a new place only counts if something changed there since the
+  screenshot before, so icons and labels that look like her marker are ignored. Use **Pick
+  Marker Again** if results look off.
 - **Daily animations:** whenever the app is open, it builds an animation for each finished day
   that doesn't have one yet. It also rebuilds one that's out of date, for example if you tapped
   Build Now in the afternoon.
