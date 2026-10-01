@@ -55,6 +55,25 @@ final class PerformanceTests: XCTestCase {
         UserDefaults.standard.removeObject(forKey: "screenshotFolderBookmark")
     }
 
+    /// Breaks the animation's cost down: decoding a screenshot vs. the whole build, for 1366- and 2732-wide sources.
+    func testAnimationCostBreakdown() async throws {
+        let small = try (0..<12).map { i in
+            try Fixtures.write(Fixtures.screenshot(marker: CGPoint(x: 600, y: 300)), to: Fixtures.makeTemporaryFolder("perf-small-\(i)").appending(path: "s.jpg"), created: Date(timeIntervalSince1970: 1_790_000_000 + Double(i) * 300))
+        }
+        let large = try fullSizeDay("perf-large", count: 12)
+
+        var start = Date()
+        for shot in large { _ = ImageFile.downsampled(shot.url, maxPixelSize: 1280) }
+        print("PERF decode one 2732-wide screenshot at 1280: \(Int(Date().timeIntervalSince(start) / 12 * 1000)) ms")
+
+        for (label, shots) in [("1366-wide", small), ("2732-wide", large)] {
+            let output = FileManager.default.temporaryDirectory.appending(path: "perf-\(UUID().uuidString).mp4")
+            start = Date()
+            try await VideoBuilder.makeVideo(from: shots, to: output) { _ in }
+            print("PERF animation from \(label) screenshots: \(Int(Date().timeIntervalSince(start) / 12 * 1000)) ms per frame")
+        }
+    }
+
     func testAnimationSpeed() async throws {
         let shots = try fullSizeDay("perf-video", count: 24)
         let output = FileManager.default.temporaryDirectory.appending(path: "perf-\(UUID().uuidString).mp4")

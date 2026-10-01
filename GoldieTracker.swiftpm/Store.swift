@@ -35,13 +35,13 @@ extension Date {
     }
 }
 
-struct Screenshot {
+struct Screenshot: Sendable {
     let url: URL
     let date: Date
     let bytes: Int64
 }
 
-struct Day: Identifiable {
+struct Day: Identifiable, Sendable {
     let id: String  // "2026-09-29", also used as the animation file name
     let date: Date
     let screenshots: [Screenshot]  // empty once they've been removed to save space; the animation stays
@@ -156,25 +156,67 @@ final class Store: ObservableObject {
         folderAccessStarted = false
     }
 
-    /// Re-scans the screenshot and animation folders, groups everything by day (newest first) and totals the storage.
+    /// What one look through the folders found.
+    private enum ScanResult: Sendable {
+        case scanned(days: [Day], videoBytes: [String: Int64], storageUsed: Int64, availableSpace: Int64?)
+        case folderUnreadable(String)
+    }
+
+    private var scanGeneration = 0  // so a slow background scan can't overwrite a newer one
+
+    /// Re-scans right away, on the main thread. For moments that need the result at once: a folder was just
+    /// chosen, the app just launched, or files were just deleted.
     func refresh() {
         guard let folderURL else { return }
+        scanGeneration += 1
+        apply(Self.scan(folder: folderURL, animationsFolder: animationsFolder))
+    }
+
+    /// Re-scans on a background thread. A month of screenshots is about 8,640 files, which takes long enough
+    /// (about a quarter of a second) to freeze the screen if done on the main thread every minute.
+    func refreshInBackground() async {
+        guard let folderURL else { return }
+        scanGeneration += 1
+        let generation = scanGeneration
+        let animationsFolder = self.animationsFolder
+        let result = await Task.detached(priority: .utility) {
+            Self.scan(folder: folderURL, animationsFolder: animationsFolder)
+        }.value
+        // Skip it if a newer scan started meanwhile, or the folder was changed.
+        guard generation == scanGeneration, folderURL == self.folderURL else { return }
+        apply(result)
+    }
+
+    private func apply(_ result: ScanResult) {
+        switch result {
+        case .folderUnreadable(let reason):
+            // The folder was deleted, renamed or can't be opened. Forget it and show setup,
+            // instead of failing (and showing this alert) again every minute.
+            releaseFolderAccess()
+            folderURL = nil
+            days = []
+            errorMessage = "Can't open the Goldie folder anymore (\(reason)). Please choose it again in Setup."
+        case let .scanned(days, videoBytes, storageUsed, availableSpace):
+            self.days = days
+            self.videoBytes = videoBytes
+            self.storageUsed = storageUsed
+            self.availableSpace = availableSpace
+        }
+    }
+
+    /// Looks through the screenshot and animation folders, groups everything by day (newest first) and totals
+    /// the storage. Touches nothing in the Store, so it can run on any thread.
+    nonisolated private static func scan(folder: URL, animationsFolder: URL) -> ScanResult {
         let keys: Set<URLResourceKey> = [.creationDateKey, .isRegularFileKey, .fileSizeKey]
         let files: [URL]
         do {
             files = try FileManager.default.contentsOfDirectory(
-                at: folderURL,
+                at: folder,
                 includingPropertiesForKeys: Array(keys),
                 options: .skipsHiddenFiles
             )
         } catch {
-            // The folder was deleted, renamed or can't be opened. Forget it and show setup,
-            // instead of failing (and showing this alert) again every minute.
-            releaseFolderAccess()
-            self.folderURL = nil
-            days = []
-            errorMessage = "Can't open the Goldie folder anymore (\(error.localizedDescription)). Please choose it again in Setup."
-            return
+            return .folderUnreadable(error.localizedDescription)
         }
 
         // Only images count. Anything else in the folder (if the wrong folder was picked) is never listed,
@@ -195,7 +237,7 @@ final class Store: ObservableObject {
 
         // The Animations folder doesn't exist until the first build, so a failed listing just means none yet.
         let videos = (try? FileManager.default.contentsOfDirectory(at: animationsFolder, includingPropertiesForKeys: [.fileSizeKey])) ?? []
-        videoBytes = [:]
+        var videoBytes: [String: Int64] = [:]
         for video in videos where video.pathExtension == "mp4" {
             let size = (try? video.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
             videoBytes[video.deletingPathExtension().lastPathComponent] = Int64(size)
@@ -204,48 +246,42 @@ final class Store: ObservableObject {
         let calendar = Calendar.current
         var allDays = Dictionary(grouping: screenshots) { calendar.startOfDay(for: $0.date) }
             .map { date, screenshots in
-                Day(
-                    id: dayID(for: date),
-                    date: date,
-                    screenshots: screenshots.sorted { $0.date < $1.date }
-                )
+                Day(id: dayID(for: date, in: calendar), date: date, screenshots: screenshots.sorted { $0.date < $1.date })
             }
         // Days whose screenshots were removed to save space still have their animation.
         let screenshotDayIDs = Set(allDays.map(\.id))
         for id in videoBytes.keys where !screenshotDayIDs.contains(id) {
-            if let date = date(forDayID: id) {
+            if let date = date(forDayID: id, in: calendar) {
                 allDays.append(Day(id: id, date: date, screenshots: []))
             }
         }
-        days = allDays.sorted { $0.date > $1.date }
-
-        storageUsed = screenshots.reduce(0) { $0 + $1.bytes } + videoBytes.values.reduce(0, +)
-        availableSpace = StorageGuard.availableBytes()
+        return .scanned(
+            days: allDays.sorted { $0.date > $1.date },
+            videoBytes: videoBytes,
+            storageUsed: screenshots.reduce(0) { $0 + $1.bytes } + videoBytes.values.reduce(0, +),
+            availableSpace: StorageGuard.availableBytes()
+        )
     }
 
     /// "2026-09-29", from the same calendar (and time zone) the days are grouped by, so the two always agree,
     /// even if the iPad changes time zone while the app is open.
     func dayID(for date: Date) -> String {
-        let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)
-        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+        Self.dayID(for: date, in: .current)
     }
 
     func date(forDayID id: String) -> Date? {
+        Self.date(forDayID: id, in: .current)
+    }
+
+    nonisolated private static func dayID(for date: Date, in calendar: Calendar) -> String {
+        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+    }
+
+    nonisolated private static func date(forDayID id: String, in calendar: Calendar) -> Date? {
         let parts = id.split(separator: "-").compactMap { Int($0) }
         guard parts.count == 3 else { return nil }
-        return Calendar.current.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
-    }
-
-    /// Every screenshot taken between two moments (inclusive), oldest first, across days.
-    func screenshots(from start: Date, to end: Date) -> [Screenshot] {
-        days.flatMap(\.screenshots)
-            .filter { $0.date >= start && $0.date <= end }
-            .sorted { $0.date < $1.date }
-    }
-
-    /// When the oldest screenshot still saved was taken.
-    var firstScreenshotDate: Date? {
-        days.compactMap { $0.screenshots.first?.date }.min()
+        return calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
     }
 
     var lastScreenshotDate: Date? {
@@ -300,7 +336,7 @@ final class Store: ObservableObject {
             }
         }
         buildProgress[day.id] = nil
-        refresh()  // pick up the new animation's size for the storage total
+        await refreshInBackground()  // pick up the new animation's size for the storage total
     }
 
     /// True when the day has no animation, or its animation was built before the day's last screenshot
@@ -313,7 +349,7 @@ final class Store: ObservableObject {
 
     /// Picks up the newest screenshots, then builds the day's animation.
     func buildNow(_ dayID: String) async {
-        refresh()
+        await refreshInBackground()
         guard let day = days.first(where: { $0.id == dayID }) else { return }
         await build(day)
     }

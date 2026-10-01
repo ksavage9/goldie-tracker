@@ -45,8 +45,9 @@ so the checklist walks you through these:
   so far, including today's, then plays it. Once a day has an animation, the button says
   **Rebuild** and remakes it on demand.
 - **Delete Animation:** on a day with an animation, tap **•••** → **Delete Animation**. If the
-  day's screenshots are still saved, they stay, and the animation isn't rebuilt automatically;
-  tap **Build Now** to bring it back. If they were already removed to save space, the animation
+  day's screenshots are still saved, they stay (unless storage runs out, when they can be removed
+  after all other days' screenshots), and the animation isn't rebuilt automatically; tap **Build
+  Now** to bring it back. If they were already removed to save space, the animation
   can't be rebuilt, so the day disappears from the list. The app asks before deleting.
 - **Time Range:** on any day, tap **Time Range** to make an animation from exactly the stretch
   you pick, with a **From** and **To** date and time. The range can cross days (for example,
@@ -95,6 +96,8 @@ so the checklist walks you through these:
     and Build Now are turned off for that day, because they need the screenshots.
   - The oldest animations are removed only as a last resort.
   - Today's screenshots, and any day still waiting for its animation, are never removed.
+  - Only image files in the Goldie folder count as screenshots. Anything else in that folder is
+    never listed and never removed, even if the wrong folder is picked.
 - **AirTag limits:** an AirTag doesn't have GPS. Its location updates only when a nearby
   iPhone or iPad passes it along. Updates can be 15–60+ minutes apart in quiet areas, so
   you'll see Goldie jump between spots rather than trace a path. If you need to know for sure

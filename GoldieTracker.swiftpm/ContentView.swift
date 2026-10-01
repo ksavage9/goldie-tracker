@@ -58,14 +58,14 @@ struct ContentView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
-                store.refresh()
+                Task { await store.refreshInBackground() }
             }
         }
         .task {
             // While the app is open: pick up new screenshots every minute, build any finished day
             // whose animation is missing or out of date, then make sure storage stays under the limit.
             while !Task.isCancelled {
-                store.refresh()
+                await store.refreshInBackground()
                 await store.buildMissingAnimations()
                 store.enforceStorageLimit()
                 try? await Task.sleep(for: .seconds(60))
@@ -116,7 +116,7 @@ struct DayList: View {
         }
         .listStyle(.insetGrouped)
         .navigationTitle("Goldie")
-        .refreshable { store.refresh() }
+        .refreshable { await store.refreshInBackground() }
         .toolbar {
             Button("Setup", systemImage: "gearshape") { showingSetup = true }
         }
