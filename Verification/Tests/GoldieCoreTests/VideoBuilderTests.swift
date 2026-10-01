@@ -109,9 +109,10 @@ final class VideoBuilderTests: XCTestCase {
                 }
             }
         }
-        // Either it notices the cancellation while waiting for the encoder, or it finishes; it must not hang or crash.
+        // A fast encoder never makes it wait, so the loop itself must notice.
         do {
             try await task.value
+            XCTFail("the build should have stopped")
         } catch {
             XCTAssertTrue(error is CancellationError, "unexpected error: \(error)")
         }

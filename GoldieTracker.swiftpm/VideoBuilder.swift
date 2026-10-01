@@ -48,6 +48,7 @@ enum VideoBuilder {
         do {
             var frameIndex: Int64 = 0
             for (index, screenshot) in screenshots.enumerated() {
+                try Task.checkCancellation()  // stop if the screen that started it was closed
                 guard writer.status == .writing else { throw stopped() }
                 await onProgress(Double(index) / Double(screenshots.count))
                 let frame = autoreleasepool {

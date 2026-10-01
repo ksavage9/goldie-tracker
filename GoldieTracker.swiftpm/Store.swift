@@ -285,10 +285,10 @@ final class Store: ObservableObject {
     }
 
     /// Every screenshot taken between two moments (inclusive), oldest first, across days.
+    /// Days are newest first and each day's screenshots oldest first, so going through the days in reverse
+    /// gives them in order without sorting. The Time Range screen counts these on every redraw.
     func screenshots(from start: Date, to end: Date) -> [Screenshot] {
-        days.flatMap(\.screenshots)
-            .filter { $0.date >= start && $0.date <= end }
-            .sorted { $0.date < $1.date }
+        days.reversed().flatMap { $0.screenshots.filter { $0.date >= start && $0.date <= end } }
     }
 
     /// When the oldest screenshot still saved was taken.

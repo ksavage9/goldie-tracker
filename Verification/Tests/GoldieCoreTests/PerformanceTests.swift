@@ -81,7 +81,9 @@ final class PerformanceTests: XCTestCase {
         ] as CFDictionary, &pool)
         start = Date()
         for shot in large { _ = VideoBuilder.makeFrame(shot, size: CGSize(width: 1280, height: 958), showsDate: false, pool: pool) }
-        print("PERF draw one frame from a 2732-wide screenshot: \(Int(Date().timeIntervalSince(start) / 12 * 1000)) ms")
+        let drawPerFrame = Date().timeIntervalSince(start) / 12
+        print("PERF draw one frame from a 2732-wide screenshot: \(Int(drawPerFrame * 1000)) ms")
+        XCTAssertLessThan(drawPerFrame, 0.5, "the app's own share of each frame; the rest is the encoder")
 
         for (label, shots) in [("1366-wide", small), ("2732-wide", large)] {
             let output = FileManager.default.temporaryDirectory.appending(path: "perf-\(UUID().uuidString).mp4")
