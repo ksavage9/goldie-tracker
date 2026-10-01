@@ -232,15 +232,19 @@ enum HeatmapBuilder {
         )
     }
 
+    /// Largest side of the background image shown on screen: sharp on an iPad, and decoded in the background
+    /// (async) rather than all 2732 × 2048 pixels on the main thread when it's first drawn.
+    private static let displayPixelSize = 2048
+
     /// The day's latest screenshot that opens. It's the heat map's background and the image the marker is picked on.
-    static func lastReadableImage(in screenshots: [Screenshot]) -> UIImage? {
+    static func lastReadableImage(in screenshots: [Screenshot]) async -> UIImage? {
         lastReadable(in: screenshots)?.image
     }
 
     private static func lastReadable(in screenshots: [Screenshot]) -> (screenshot: Screenshot, image: UIImage)? {
         for screenshot in screenshots.reversed() {
-            if let image = UIImage(contentsOfFile: screenshot.url.path) {
-                return (screenshot, image)
+            if let image = ImageFile.downsampled(screenshot.url, maxPixelSize: displayPixelSize) {
+                return (screenshot, UIImage(cgImage: image))
             }
         }
         return nil

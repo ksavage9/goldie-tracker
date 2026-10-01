@@ -72,7 +72,7 @@ struct HeatmapView: View {
         // All the work runs here, so SwiftUI cancels it when the screen closes.
         .task(id: markerTap) {
             if referenceImage == nil {
-                referenceImage = HeatmapBuilder.lastReadableImage(in: day.screenshots)
+                referenceImage = await HeatmapBuilder.lastReadableImage(in: day.screenshots)
             }
             guard let referenceImage else {
                 phase = .failed("No readable screenshots for this day.")

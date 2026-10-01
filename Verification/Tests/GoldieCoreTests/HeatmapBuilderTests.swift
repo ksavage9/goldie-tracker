@@ -156,7 +156,9 @@ final class HeatmapBuilderTests: XCTestCase {
         try Data("not an image".utf8).write(to: badURL)
         let bad = Screenshot(url: badURL, date: start + 300, bytes: 12)
 
-        XCTAssertNotNil(HeatmapBuilder.lastReadableImage(in: [good, bad]), "an unreadable last file is skipped")
-        XCTAssertNil(HeatmapBuilder.lastReadableImage(in: [bad]))
+        let skippingTheBadOne = await HeatmapBuilder.lastReadableImage(in: [good, bad])
+        let noneReadable = await HeatmapBuilder.lastReadableImage(in: [bad])
+        XCTAssertNotNil(skippingTheBadOne, "an unreadable last file is skipped")
+        XCTAssertNil(noneReadable)
     }
 }

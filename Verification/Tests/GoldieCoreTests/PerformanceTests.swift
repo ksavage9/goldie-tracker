@@ -27,6 +27,34 @@ final class PerformanceTests: XCTestCase {
         XCTAssertLessThan(perScreenshot, 1.5, "a day of 288 screenshots should take a few minutes at most, even on a slow simulator")
     }
 
+    /// A month of screenshots (30 days × 288) is about 8,640 files. Scanning them runs on the main thread every
+    /// minute, so it must stay quick.
+    func testFolderScanSpeedWithAMonthOfScreenshots() throws {
+        let folder = try Fixtures.makeTemporaryFolder("perf-month")
+        let today = Calendar.current.startOfDay(for: .now)
+        for day in 0..<30 {
+            let dayStart = Calendar.current.date(byAdding: .day, value: -day, to: today)!
+            for i in 0..<288 {
+                let url = folder.appending(path: "\(day)-\(i).jpg")
+                FileManager.default.createFile(atPath: url.path, contents: Data(count: 16))
+                try FileManager.default.setAttributes([.creationDate: dayStart + Double(i) * 300], ofItemAtPath: url.path)
+            }
+        }
+        UserDefaults.standard.removeObject(forKey: "screenshotFolderBookmark")
+        try? FileManager.default.removeItem(at: URL.documentsDirectory.appending(path: "Animations"))  // left by other tests
+        let store = Store()
+        store.setFolder(folder)
+        XCTAssertEqual(store.days.count, 30)
+        let start = Date()
+        for _ in 0..<5 {
+            store.refresh()
+        }
+        let perScan = Date().timeIntervalSince(start) / 5
+        print("PERF folder scan: \(Int(perScan * 1000)) ms for 8,640 screenshots")
+        XCTAssertLessThan(perScan, 0.5, "this runs on the main thread every minute")
+        UserDefaults.standard.removeObject(forKey: "screenshotFolderBookmark")
+    }
+
     func testAnimationSpeed() async throws {
         let shots = try fullSizeDay("perf-video", count: 24)
         let output = FileManager.default.temporaryDirectory.appending(path: "perf-\(UUID().uuidString).mp4")
