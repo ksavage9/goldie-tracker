@@ -131,10 +131,11 @@ enum HeatmapBuilder {
                 skipped += 1  // zoomed, moved too far, or not the map at all
                 continue
             }
-            let grid = loaded.grid
-            defer { previous = (grid, shift) }
+            // Not called `grid`: that name inside the closure above would then mean this, not the grid(for:) function.
+            let screen = loaded.grid
+            defer { previous = (screen, shift) }
 
-            guard let (spot, score) = findMarker(in: grid, template) else { continue }  // she's off screen, or hidden
+            guard let (spot, score) = findMarker(in: screen, template) else { continue }  // she's off screen, or hidden
             let inBackground = GridPoint(x: spot.x + shift.x, y: spot.y + shift.y)
             guard (0..<gridWidth).contains(inBackground.x), (0..<height).contains(inBackground.y) else { continue }
 
@@ -144,7 +145,7 @@ enum HeatmapBuilder {
                 // Same place as last time.
             } else if let previous {
                 let before = GridPoint(x: inBackground.x - previous.shift.x, y: inBackground.y - previous.shift.y)
-                guard changed(grid, at: spot, comparedWith: previous.grid, at: before, radius: r) else { continue }
+                guard changed(screen, at: spot, comparedWith: previous.grid, at: before, radius: r) else { continue }
             } else {
                 guard score >= firstSightingCorrelation else { continue }
             }
