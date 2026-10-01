@@ -7,6 +7,7 @@ struct DayDetailView: View {
     @State private var showingHeatmap = false
     @State private var showingCustomRange = false
     @State private var confirmingDelete = false
+    @Environment(\.horizontalSizeClass) private var sizeClass  // compact in Split View or Slide Over
 
     var body: some View {
         // Just the date and the video: no large title, so the video gets as much of the screen as possible.
@@ -26,7 +27,7 @@ struct DayDetailView: View {
                 showingHeatmap = true
             } label: {
                 Label("Heat Map", systemImage: "flame.fill")
-                    .labelStyle(.titleAndIcon)
+                    .labelStyle(ToolbarLabelStyle(iconOnly: sizeClass == .compact))
             }
             .buttonStyle(.bordered)
             .disabled(day.screenshots.isEmpty)  // heat maps and builds need the screenshots
@@ -35,14 +36,14 @@ struct DayDetailView: View {
                 showingCustomRange = true
             } label: {
                 Label("Time Range", systemImage: "clock")
-                    .labelStyle(.titleAndIcon)
+                    .labelStyle(ToolbarLabelStyle(iconOnly: sizeClass == .compact))
             }
             .buttonStyle(.bordered)
             .disabled(day.screenshots.isEmpty)
 
             Button(action: buildNow) {
                 Label(store.videoDate(for: day) == nil ? "Build Now" : "Rebuild", systemImage: "wand.and.stars")
-                    .labelStyle(.titleAndIcon)
+                    .labelStyle(ToolbarLabelStyle(iconOnly: sizeClass == .compact))
             }
             .buttonStyle(.borderedProminent)
             .disabled(store.isBuilding(day) || day.screenshots.isEmpty)
@@ -109,6 +110,23 @@ struct DayDetailView: View {
 
     private func buildNow() {
         Task { await store.buildNow(day.id) }
+    }
+}
+
+/// Toolbar buttons show their names when there's room, and only their icons in a narrow window
+/// (Split View or Slide Over), where four named buttons don't fit.
+struct ToolbarLabelStyle: LabelStyle {
+    let iconOnly: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        if iconOnly {
+            configuration.icon
+        } else {
+            HStack(spacing: 6) {
+                configuration.icon
+                configuration.title
+            }
+        }
     }
 }
 
